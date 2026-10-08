@@ -63,7 +63,7 @@ try {
     },
     print: (text) => console.log(text),
     log,
-    dashboardUrl: `http://127.0.0.1:${config.dashboardPort}`,
+    dashboardUrl: config.dashboardUrl,
     dryRun: args.includes("--dry-run"),
     test: args.includes("--test"),
   });
