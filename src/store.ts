@@ -15,6 +15,8 @@ export interface StoredReading {
   plan: string | null;
   fetchedAt: string;
   recordedAt: string;
+  /** Where the reading came from: `openusage` (a Snapshot, the default) or `backfill:<provider>`. */
+  source?: string;
 }
 
 /** A recording run that got no Snapshot, and why (ADR 0001: gaps must be visible). */
@@ -50,6 +52,13 @@ const MIGRATIONS: string[] = [
      recorded_at TEXT NOT NULL,
      reason      TEXT NOT NULL
    );`,
+  // How far each Backfill has read each log file, so reruns only read what was appended.
+  `CREATE TABLE backfill_progress (
+     source      TEXT NOT NULL,
+     path        TEXT NOT NULL,
+     offset      INTEGER NOT NULL,
+     PRIMARY KEY (source, path)
+   );`,
 ];
 
 export interface Store {
@@ -63,6 +72,11 @@ export interface Store {
   /** The newest gaps first. */
   recentGaps(limit: number): Gap[];
   countReadings(): number;
+  /** The plan of the provider's newest live Snapshot (not a Backfill), or null. */
+  livePlan(provider: string): string | null;
+  /** Bytes of a log file a Backfill (`source`) has already read; 0 for a new file. */
+  backfillOffset(source: string, path: string): number;
+  saveBackfillOffset(source: string, path: string, offset: number): void;
   close(): void;
 }
 
@@ -73,12 +87,12 @@ export function openStore(path: string): Store {
 
   const insert = db.prepare(
     `INSERT OR IGNORE INTO readings
-       (provider, label, role, used, "limit", unit, resets_at, period_ms, plan, fetched_at, recorded_at)
-     VALUES ($provider, $label, $role, $used, $limit, $unit, $resetsAt, $periodMs, $plan, $fetchedAt, $recordedAt)`,
+       (provider, label, role, used, "limit", unit, resets_at, period_ms, plan, fetched_at, recorded_at, source)
+     VALUES ($provider, $label, $role, $used, $limit, $unit, $resetsAt, $periodMs, $plan, $fetchedAt, $recordedAt, $source)`,
   );
   const insertMany = db.transaction((rows: StoredReading[]) => {
     let added = 0;
-    for (const row of rows) added += insert.run({ ...row }).changes;
+    for (const row of rows) added += insert.run({ ...row, source: row.source ?? "openusage" }).changes;
     return added;
   });
 
@@ -118,6 +132,25 @@ export function openStore(path: string): Store {
         .all(limit),
     countReadings: () =>
       db.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM readings").get()?.n ?? 0,
+    livePlan: (provider) =>
+      db
+        .query<{ plan: string | null }, [string]>(
+          `SELECT plan FROM readings WHERE provider = ? AND source = 'openusage'
+            ORDER BY fetched_at DESC, id DESC LIMIT 1`,
+        )
+        .get(provider)?.plan ?? null,
+    backfillOffset: (source, path) =>
+      db
+        .query<{ offset: number }, [string, string]>(
+          "SELECT offset FROM backfill_progress WHERE source = ? AND path = ?",
+        )
+        .get(source, path)?.offset ?? 0,
+    saveBackfillOffset: (source, path, offset) => {
+      db.query(
+        `INSERT INTO backfill_progress (source, path, offset) VALUES (?, ?, ?)
+           ON CONFLICT (source, path) DO UPDATE SET offset = excluded.offset`,
+      ).run(source, path, offset);
+    },
     close: () => db.close(),
   };
 }
