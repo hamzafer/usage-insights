@@ -2,7 +2,8 @@ import { limitsOverageAndPace } from "../limits-summary.ts";
 import type { CycleOverage } from "../overage.ts";
 import type { Pace } from "../pace.ts";
 import { idleCapacity, READING_GAP_TOLERANCE_MS } from "../sessions.ts";
-import type { Gap, StoredReading } from "../store.ts";
+import type { Gap, StoredReading, TokenEvent } from "../store.ts";
+import { type CycleTokens, tokensByCycle } from "../token-shares.ts";
 import { deriveWindows, type Reading, type Waste, type Window } from "../window-model.ts";
 
 /**
@@ -18,6 +19,8 @@ export interface DashboardData {
   latest: StoredReading[];
   /** Every recorder gap, oldest first. */
   gaps: Gap[];
+  /** Token events from the token Backfill, oldest first; none when omitted. */
+  tokens?: TokenEvent[];
 }
 
 export interface CycleResult {
@@ -100,7 +103,13 @@ export interface DataHealth {
   snapshotGaps: (Span & { provider: string })[];
 }
 
+export interface ProjectsPage {
+  providers: { provider: string; cycles: CycleTokens[] }[];
+}
+
 export const RECENT_CYCLES = 8;
+/** Cycles per Provider on the Projects and models page. */
+export const RECENT_TOKEN_CYCLES = 6;
 export const LIMIT_HIT_LOOKBACK_MS = 28 * 24 * 3_600_000;
 /**
  * No Snapshot for longer than this is a gap: the same tolerance Idle Capacity uses, so hatched
@@ -203,6 +212,20 @@ export function buildHealth(data: DashboardData, now: string | Date): DataHealth
     snapshotGaps: providers
       .flatMap((provider) => snapshotGaps(byProvider.get(provider)!, now).map((g) => ({ provider, ...g })))
       .toSorted((a, b) => toMs(b.from) - toMs(a.from)),
+  };
+}
+
+/**
+ * Projects and models page: token share per Project and model for the last RECENT_TOKEN_CYCLES
+ * Cycles with tokens, per Provider, newest Cycle first. Projects carry folder names only.
+ */
+export function buildProjects(data: DashboardData, now: string | Date): ProjectsPage {
+  const cycles = tokensByCycle(data.tokens ?? [], analysedWindows(data.readings, now), now);
+  return {
+    providers: [...Map.groupBy(cycles, (c) => c.provider)].map(([provider, own]) => ({
+      provider,
+      cycles: own.slice(-RECENT_TOKEN_CYCLES).toReversed(),
+    })),
   };
 }
 

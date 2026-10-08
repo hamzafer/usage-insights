@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "backfill:codex": "bun run src/cli/backfill-codex.ts",
+    "backfill:tokens": "bun run src/cli/backfill-tokens.ts",
     "record": "bun run src/cli/record.ts",
     "status": "bun run src/cli/status.ts",
     "summary": "bun run src/cli/summary.ts",

@@ -1,6 +1,6 @@
 import type { LineRole } from "../src/classify.ts";
 import type { DashboardData } from "../src/dashboard/view-model.ts";
-import type { Gap, StoredReading } from "../src/store.ts";
+import type { Gap, StoredReading, TokenEvent } from "../src/store.ts";
 import type { Reading } from "../src/window-model.ts";
 
 /** Synthetic readings only (ADR 0002: no real data in the repo). */
@@ -55,6 +55,11 @@ export function stored(r: Reading, plan: string | null = null): StoredReading {
     fetchedAt: r.fetchedAt,
     recordedAt: r.fetchedAt,
   };
+}
+
+/** A synthetic API call of `tokens` tokens (half input, a quarter each cache reads and output). */
+export function tokenEvent(provider: string, at: string, project: string | null, model: string, tokens: number): TokenEvent {
+  return { provider, at, project, model, input: tokens / 2, cacheWrite: 0, cacheRead: tokens / 4, output: tokens / 4 };
 }
 
 export const SYNTHETIC_GAPS: Gap[] = [

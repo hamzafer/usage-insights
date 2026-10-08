@@ -1,5 +1,5 @@
-import { renderHealth, renderHistory, renderMessage, renderOverview, type PageContext } from "./render.ts";
-import { buildHealth, buildHistory, buildOverview, type DashboardData } from "./view-model.ts";
+import { renderHealth, renderHistory, renderMessage, renderOverview, renderProjects, type PageContext } from "./render.ts";
+import { buildHealth, buildHistory, buildOverview, buildProjects, type DashboardData } from "./view-model.ts";
 
 /**
  * The dashboard's request handler: routes to view models, rendered as HTML or JSON.
@@ -46,6 +46,8 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
     if (path === "/health") return html(renderHealth(buildHealth(data, at), ctx));
     if (path === "/api/overview") return json({ now: ctx.now, providers: overview() });
     if (path === "/api/health") return json(buildHealth(data, at));
+    if (path === "/projects") return html(renderProjects(buildProjects(data, at), ctx));
+    if (path === "/api/projects") return json(buildProjects(data, at));
     if (provider !== undefined) {
       const history = buildHistory(data, decodeURIComponent(provider), at);
       const api = path.startsWith("/api/");

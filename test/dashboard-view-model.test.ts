@@ -1,6 +1,38 @@
 import { describe, expect, test } from "bun:test";
-import { buildHealth, buildHistory, buildOverview, SNAPSHOT_GAP_MS } from "../src/dashboard/view-model.ts";
-import { NOW, reading, syntheticData } from "./dashboard-fixtures.ts";
+import { buildHealth, buildHistory, buildOverview, buildProjects, RECENT_TOKEN_CYCLES, SNAPSHOT_GAP_MS } from "../src/dashboard/view-model.ts";
+import { NOW, reading, syntheticData, tokenEvent } from "./dashboard-fixtures.ts";
+
+describe("projects and models", () => {
+  test("token share per Project and model per Cycle, per Provider, newest Cycle first, folder names only", () => {
+    const data = {
+      ...syntheticData(),
+      tokens: [
+        tokenEvent("codex", "2026-09-30T10:00:00.000Z", "/somewhere/alpha", "gpt-5.5", 100),
+        tokenEvent("codex", "2026-10-03T10:00:00.000Z", "/somewhere/alpha", "gpt-5.5", 300),
+        tokenEvent("codex", "2026-10-03T11:00:00.000Z", null, "gpt-6-astra", 100),
+      ],
+    };
+    const page = buildProjects(data, NOW);
+    expect(page.providers.map((p) => p.provider)).toEqual(["codex"]);
+    const [running, ended] = page.providers[0]!.cycles;
+    expect(running).toMatchObject({ from: "2026-10-01T00:00:00.000Z", to: "2026-10-08T00:00:00.000Z", running: true, inferred: false, total: 400 });
+    expect(running!.byProject).toEqual([
+      { name: "alpha", tokens: 300, share: 0.75 },
+      { name: "(other)", tokens: 100, share: 0.25 },
+    ]);
+    expect(running!.byModel.map((m) => m.name)).toEqual(["gpt-5.5", "gpt-6-astra"]);
+    expect(ended).toMatchObject({ to: "2026-10-01T00:00:00.000Z", running: false, inferred: true, total: 100 });
+    expect(JSON.stringify(page)).not.toContain("/somewhere");
+  });
+
+  test(`keeps the last ${RECENT_TOKEN_CYCLES} Cycles with tokens, and nothing without token data`, () => {
+    const tokens = Array.from({ length: RECENT_TOKEN_CYCLES + 2 }, (_, i) =>
+      tokenEvent("claude", new Date(Date.parse("2026-10-04T00:00:00.000Z") - i * 7 * 86_400_000).toISOString(), "/x/alpha", "claude-opus-5", 10),
+    );
+    expect(buildProjects({ ...syntheticData(), tokens }, NOW).providers[0]!.cycles).toHaveLength(RECENT_TOKEN_CYCLES);
+    expect(buildProjects(syntheticData(), NOW).providers).toEqual([]);
+  });
+});
 
 describe("overview", () => {
   test("lists every Provider with Cycles, sorted by name", () => {
