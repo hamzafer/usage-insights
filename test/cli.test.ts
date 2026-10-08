@@ -80,7 +80,23 @@ describe("summary", () => {
 
     const summary = run("src/cli/summary.ts", deadUrl, { TZ: "UTC" });
     expect(summary.code).toBe(0);
-    expect(summary.out).toBe("codex\n  Weekly  reset 2026-01-08 09:00  Waste  25%\n");
+    expect(summary.out).toStartWith("codex\n  Weekly  reset 2026-01-08 09:00  Waste  25%\n");
+  });
+
+  test("adds Limit Hits, Overage and Pace from stored Session, Cycle and Overage readings", () => {
+    const store = openStore(join(dataDir, "usage.db"));
+    const line = { provider: "claude-work", unit: "percent", periodMs: null, plan: null, recordedAt: "2026-01-05T10:00:05.000Z" };
+    store.saveReadings([
+      { ...line, label: "Session", role: "session", used: 100, limit: 100, resetsAt: "2026-01-05T12:00:00.000Z", fetchedAt: "2026-01-05T10:00:00.000Z" },
+      { ...line, label: "Extra usage spent", role: "overage", unit: "dollars", used: 1, limit: 200, resetsAt: null, fetchedAt: "2026-01-05T10:00:00.000Z" },
+      { ...line, label: "Extra usage spent", role: "overage", unit: "dollars", used: 3.5, limit: 200, resetsAt: null, fetchedAt: "2026-01-05T10:30:00.000Z" },
+    ]);
+    store.close();
+
+    const summary = run("src/cli/summary.ts", deadUrl, { TZ: "UTC" });
+    expect(summary.code).toBe(0);
+    expect(summary.out).toContain("Limit Hits\n  claude-work  Session  hit 2026-01-05 10:00  blocked 30m until Overage\n");
+    expect(summary.out).toContain("Pace\n  no running Cycles\n");
   });
 
   test("adds a Sessions section with Session Waste and Idle Capacity", () => {
