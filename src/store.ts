@@ -65,7 +65,7 @@ export interface RunOutcome {
  * Schema migrations, applied in order. The database's `user_version` pragma holds how many
  * have run. Never edit a shipped migration; append a new one.
  */
-const MIGRATIONS: string[] = [
+export const MIGRATIONS: string[] = [
   `CREATE TABLE readings (
      id          INTEGER PRIMARY KEY,
      provider    TEXT NOT NULL,
@@ -121,6 +121,9 @@ const MIGRATIONS: string[] = [
    CREATE INDEX runs_by_job ON runs (job, at);`,
 ];
 
+/** How long a statement waits for another process's lock before failing. */
+const BUSY_TIMEOUT_MS = 5000;
+
 export interface Store {
   /** Stores readings, skipping any already stored. Returns how many rows were new. */
   saveReadings(readings: StoredReading[]): number;
@@ -162,8 +165,11 @@ export function openStore(path: string, options: { readonly?: boolean } = {}): S
   const db = options.readonly
     ? new Database(path, { readonly: true, strict: true })
     : new Database(path, { create: true, strict: true });
+  // The Recorder, Backfills, Report and dashboard run as separate processes: wait for another's
+  // lock instead of failing with "database is locked".
+  db.exec(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS};`);
   if (!options.readonly) {
-    db.exec("PRAGMA journal_mode = WAL;");
+    useWal(db);
     migrate(db);
   }
 
@@ -281,13 +287,38 @@ export function openStore(path: string, options: { readonly?: boolean } = {}): S
   };
 }
 
+function userVersion(db: Database): number {
+  return db.query<{ user_version: number }, []>("PRAGMA user_version").get()?.user_version ?? 0;
+}
+
+/**
+ * Applies the pending migrations. The version is read again inside one write transaction
+ * (BEGIN IMMEDIATE), so two processes opening an old data file never both apply a migration.
+ */
 function migrate(db: Database): void {
-  const current = db.query<{ user_version: number }, []>("PRAGMA user_version").get()
-    ?.user_version ?? 0;
-  for (let version = current; version < MIGRATIONS.length; version++) {
-    db.transaction(() => {
+  if (userVersion(db) >= MIGRATIONS.length) return;
+  db.transaction(() => {
+    for (let version = userVersion(db); version < MIGRATIONS.length; version++) {
       db.exec(MIGRATIONS[version]!);
       db.exec(`PRAGMA user_version = ${version + 1}`);
-    })();
+    }
+  }).immediate();
+}
+
+/**
+ * Switches to WAL, so readers never block the writer. SQLite skips the busy timeout for this
+ * switch when another process holds a lock, so it is retried until the timeout.
+ */
+function useWal(db: Database): void {
+  const deadline = Date.now() + BUSY_TIMEOUT_MS;
+  for (;;) {
+    try {
+      const mode = db.query<{ journal_mode: string }, []>("PRAGMA journal_mode").get()?.journal_mode;
+      if (mode !== "wal") db.exec("PRAGMA journal_mode = WAL;");
+      return;
+    } catch (error) {
+      if ((error as { code?: string }).code !== "SQLITE_BUSY" || Date.now() >= deadline) throw error;
+      Bun.sleepSync(20);
+    }
   }
 }
