@@ -17,7 +17,7 @@ try {
     now,
   );
   console.log(formatSummary(windows));
-  const sessions = formatSessions(windows, now);
+  const sessions = formatSessions(windows, now, { gaps: store.allGaps() });
   if (sessions) console.log(`\n${sessions}`);
   console.log(`\n${formatLimitsOverageAndPace(limitsOverageAndPace(readings, now))}`);
 } finally {

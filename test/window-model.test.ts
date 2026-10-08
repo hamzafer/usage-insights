@@ -224,3 +224,53 @@ describe("Session Waste", () => {
     expect(windows[2]!.waste?.share).toBe(0.95);
   });
 });
+
+describe("flip-flopping Resets", () => {
+  // Shape of the real Codex Backfill case: an early Reset at 14:10, then readings that bounce
+  // between two Reset times 17 minutes apart (with different usage) before settling.
+  const B = "2026-09-14T14:10:11.000Z";
+  const C = "2026-09-14T14:27:26.000Z";
+
+  test("readings alternating between two Reset times minutes apart stay one Cycle", () => {
+    const windows = deriveWindows(
+      [
+        reading("2026-09-07T14:00:00.000Z", 82, "2026-09-09T11:47:35.000Z"),
+        reading("2026-09-07T14:10:10.000Z", 0, B),
+        reading("2026-09-07T14:11:39.000Z", 2, B),
+        reading("2026-09-07T14:11:56.000Z", 7, C),
+        reading("2026-09-07T14:12:00.000Z", 2, B),
+        reading("2026-09-07T14:26:53.000Z", 16, B),
+        reading("2026-09-07T14:27:29.000Z", 0, C),
+        reading("2026-09-07T14:57:30.000Z", 12, C),
+        reading("2026-09-08T10:00:00.000Z", 30, C),
+      ],
+      "2026-09-08T12:00:00.000Z",
+    );
+
+    expect(windows.map((w) => [w.readings.length, w.endedAt])).toEqual([
+      [1, "2026-09-07T14:10:10.000Z"],
+      [8, null],
+    ]);
+    // The Reset the readings settled on.
+    expect(windows[1]!.resetsAt).toBe("2026-09-14T14:27:00.000Z");
+  });
+
+  test("a genuine early Reset (usage drops and the new Reset sticks) still starts a new Cycle", () => {
+    const windows = deriveWindows(
+      [
+        reading("2026-09-07T10:00:00.000Z", 40, "2026-09-10T09:00:00.000Z"),
+        reading("2026-09-07T14:00:00.000Z", 82, "2026-09-10T09:00:00.000Z"),
+        reading("2026-09-07T14:10:00.000Z", 0, "2026-09-14T14:10:00.000Z"),
+        reading("2026-09-07T14:15:00.000Z", 1, "2026-09-14T14:10:00.000Z"),
+        reading("2026-09-08T10:00:00.000Z", 20, "2026-09-14T14:10:00.000Z"),
+      ],
+      "2026-09-08T12:00:00.000Z",
+    );
+
+    expect(windows.map((w) => [w.readings.length, w.endedAt])).toEqual([
+      [2, "2026-09-07T14:10:00.000Z"],
+      [3, null],
+    ]);
+    expect(windows[0]!.waste).toMatchObject({ share: 0.18 });
+  });
+});
