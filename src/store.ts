@@ -154,10 +154,18 @@ export interface Store {
   close(): void;
 }
 
-export function openStore(path: string): Store {
-  const db = new Database(path, { create: true, strict: true });
-  db.exec("PRAGMA journal_mode = WAL;");
-  migrate(db);
+/**
+ * Opens (creating and migrating) the store at `path`. `readonly`: for dry runs, which write nothing;
+ * the file must exist, and it is neither migrated nor switched to WAL (writes then throw).
+ */
+export function openStore(path: string, options: { readonly?: boolean } = {}): Store {
+  const db = options.readonly
+    ? new Database(path, { readonly: true, strict: true })
+    : new Database(path, { create: true, strict: true });
+  if (!options.readonly) {
+    db.exec("PRAGMA journal_mode = WAL;");
+    migrate(db);
+  }
 
   const insert = db.prepare(
     `INSERT OR IGNORE INTO readings

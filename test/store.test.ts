@@ -60,6 +60,16 @@ test("readingsWithRole lists readings of the given roles with their source, olde
   store.close();
 });
 
+test("a read-only store (dry runs) reads but never writes, migrates or creates", () => {
+  const path = join(mkdtempSync(join(tmpdir(), "usage-insights-test-")), "usage.db");
+  expect(() => openStore(path, { readonly: true })).toThrow();
+  openStore(path).close();
+  const store = openStore(path, { readonly: true });
+  expect(store.countReadings()).toBe(0);
+  expect(() => store.saveRun({ job: "report", at: "2026-01-05T10:00:00.000Z", ok: true, reason: null })).toThrow();
+  store.close();
+});
+
 test("run outcomes: newest first, failures with their reason, and the last run time per job", () => {
   const store = openStore(join(mkdtempSync(join(tmpdir(), "usage-insights-test-")), "usage.db"));
   expect(store.lastRunAt("backfill:codex")).toBeNull();

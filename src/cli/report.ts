@@ -39,7 +39,8 @@ const cfg = (): Config => {
   return config;
 };
 let store: Store | null = null;
-const db = () => (store ??= openStore(cfg().dbPath));
+// A dry run opens the store read-only: no migration, no outcome, nothing written.
+const db = () => (store ??= openStore(cfg().dbPath, { readonly: dryRun }));
 const log = (line: string) => console.log(`${new Date().toISOString()} ${line}`);
 
 try {
