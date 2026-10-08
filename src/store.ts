@@ -72,6 +72,8 @@ export interface Store {
   /** The newest gaps first. */
   recentGaps(limit: number): Gap[];
   countReadings(): number;
+  /** The plan of the provider's newest live Snapshot (not a Backfill), or null. */
+  livePlan(provider: string): string | null;
   /** Bytes of a log file a Backfill (`source`) has already read; 0 for a new file. */
   backfillOffset(source: string, path: string): number;
   saveBackfillOffset(source: string, path: string, offset: number): void;
@@ -130,6 +132,13 @@ export function openStore(path: string): Store {
         .all(limit),
     countReadings: () =>
       db.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM readings").get()?.n ?? 0,
+    livePlan: (provider) =>
+      db
+        .query<{ plan: string | null }, [string]>(
+          `SELECT plan FROM readings WHERE provider = ? AND source = 'openusage'
+            ORDER BY fetched_at DESC, id DESC LIMIT 1`,
+        )
+        .get(provider)?.plan ?? null,
     backfillOffset: (source, path) =>
       db
         .query<{ offset: number }, [string, string]>(

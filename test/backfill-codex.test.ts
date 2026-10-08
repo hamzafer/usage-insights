@@ -108,6 +108,23 @@ test("the same readings logged twice (sub-agent logs, reruns) are stored once", 
   expect(store.countReadings()).toBe(2);
 });
 
+test("with the account's plan given, lines of another account (another plan) are skipped", () => {
+  writeLog(LOG, [
+    tokenCount("2026-10-08T10:00:00.000Z", session(70), weekly(90), { plan_type: "plus" }),
+    tokenCount("2026-10-08T10:00:05.000Z", session(12), weekly(34), { plan_type: null }),
+    tokenCount("2026-10-08T10:00:10.000Z", session(13), weekly(35), { plan_type: "team" }),
+  ]);
+
+  backfillCodex({ sessionsDir, store, now: NOW, plan: "Team" });
+
+  expect(store.readingsWithRole(["cycle"]).map((r) => r.used)).toEqual([34, 35]);
+  expect(store.latestReadings().map((r) => r.plan)).toEqual(["Team", "Team"]);
+  // Backfilled readings never stand in for the live account's plan.
+  expect(store.livePlan("codex")).toBeNull();
+  store.saveReadings([{ ...store.latestReadings()[0]!, plan: "Team", fetchedAt: "2026-10-08T11:00:00.000Z", source: "openusage" }]);
+  expect(store.livePlan("codex")).toBe("Team");
+});
+
 test("skips lines it cannot measure: no Reset (2025), no windows, other limits, broken JSON", () => {
   writeLog("2025/10/02/rollout-2025-10-02T13-00-00-a.jsonl", [
     sessionMeta("2025-10-02T11:00:00.000Z"),

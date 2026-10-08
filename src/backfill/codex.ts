@@ -16,6 +16,11 @@ export interface CodexBackfillOptions {
   sessionsDir: string;
   store: Store;
   now?: Date;
+  /**
+   * The plan of the account the live Recorder tracks (e.g. `Team`). Session logs can mix
+   * accounts; lines that name another plan are skipped. Lines without a plan are kept.
+   */
+  plan?: string | null;
 }
 
 export interface CodexBackfillResult {
@@ -32,7 +37,7 @@ export interface CodexBackfillResult {
  * Rerunnable: readings are unique per line and time, and a line still being written is left
  * for the next run. A file that shrank (rewritten) is read again from the start.
  */
-export function backfillCodex({ sessionsDir, store, now = new Date() }: CodexBackfillOptions): CodexBackfillResult {
+export function backfillCodex({ sessionsDir, store, now = new Date(), plan = null }: CodexBackfillOptions): CodexBackfillResult {
   const recordedAt = now.toISOString();
   const result: CodexBackfillResult = { files: 0, linesRead: 0, stored: 0 };
   if (!existsSync(sessionsDir)) return result;
@@ -47,7 +52,7 @@ export function backfillCodex({ sessionsDir, store, now = new Date() }: CodexBac
 
     const lines = bytes.subarray(offset, end).toString("utf8").split("\n").slice(0, -1);
     result.linesRead += lines.length;
-    result.stored += store.saveReadings(lines.flatMap((line) => readingsOfLine(line, recordedAt)));
+    result.stored += store.saveReadings(lines.flatMap((line) => readingsOfLine(line, recordedAt, plan)));
     store.saveBackfillOffset(CODEX_BACKFILL_SOURCE, relative, end);
   }
   return result;
@@ -61,7 +66,7 @@ interface RateWindow {
   resets_at?: unknown;
 }
 
-function readingsOfLine(line: string, recordedAt: string): StoredReading[] {
+function readingsOfLine(line: string, recordedAt: string, accountPlan: string | null): StoredReading[] {
   if (!line.includes('"token_count"')) return [];
   let event: any;
   try {
@@ -73,6 +78,8 @@ function readingsOfLine(line: string, recordedAt: string): StoredReading[] {
   if (!limits || typeof event.timestamp !== "string") return [];
   // Only the main Codex limit (named `codex` since 2026-03, unnamed before); `premium` and others are separate meters.
   if (limits.limit_id != null && limits.limit_id !== "codex") return [];
+  const plan = typeof limits.plan_type === "string" && limits.plan_type ? capitalize(limits.plan_type) : null;
+  if (plan && accountPlan && plan.toLowerCase() !== accountPlan.toLowerCase()) return [];
   const fetchedAt = new Date(event.timestamp).toISOString();
   return [limits.primary, limits.secondary].flatMap((w: RateWindow | null) => {
     const label = w ? labelOf(w.window_minutes) : null;
@@ -87,7 +94,7 @@ function readingsOfLine(line: string, recordedAt: string): StoredReading[] {
         unit: "percent",
         resetsAt: new Date(w.resets_at * 1000).toISOString(),
         periodMs: label === "Session" ? SESSION_MS : WEEKLY_MS,
-        plan: null,
+        plan,
         fetchedAt,
         recordedAt,
         source: CODEX_BACKFILL_SOURCE,
@@ -105,4 +112,9 @@ function labelOf(windowMinutes: unknown): "Session" | "Weekly" | null {
   if (Math.abs(windowMinutes - 300) <= 1) return "Session";
   if (Math.abs(windowMinutes - 10_080) <= 1) return "Weekly";
   return null;
+}
+
+/** `team` -> `Team`, as OpenUsage names plans. */
+function capitalize(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1);
 }
