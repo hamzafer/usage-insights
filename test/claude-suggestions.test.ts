@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { buildReport } from "../src/report/build.ts";
-import { type ClaudeClient, ClaudeSuggestions, parseSuggestions } from "../src/report/claude-suggestions.ts";
+import { type ClaudeClient, ClaudeSuggestions, MAX_SUGGESTION_CHARS, parseSuggestions } from "../src/report/claude-suggestions.ts";
 import { input } from "./report-fixtures.ts";
 
 const SETUP = "# Setup\n\n- Codex Team: code reviews\n- Cursor Team: rarely used, $20/month allowance\n";
@@ -79,6 +79,37 @@ test("keeps at most 3, trimmed, dropping empty and non-text items", () => {
 test("a bare array is accepted too, and an empty list means no Suggestions", () => {
   expect(parseSuggestions('["Only one."]')).toEqual({ ok: true, items: ["Only one."] });
   expect(parseSuggestions('{"suggestions": []}')).toEqual({ ok: true, items: [] });
+});
+
+test("the prompt asks for short, one-sentence Suggestions about the Setup, never about filling it in", async () => {
+  const claude = new FakeClaude('{"suggestions": []}');
+  await new ClaudeSuggestions({ client: claude, readSetup: () => DRAFT_SETUP, timeZone: "UTC" }).suggest(report);
+  const user = claude.prompts[0]!.user;
+  expect(user).toContain(`at most ${MAX_SUGGESTION_CHARS} characters`);
+  expect(user).toContain("one sentence");
+  expect(user).toMatch(/never .*DRAFT/i);
+});
+
+test("a long Suggestion is shortened to 120 characters on a word boundary, the same in Markdown and Telegram", () => {
+  const long = "Move all code reviews from Claude (Work) to Codex Team, because Codex reset with 62% wasted while Claude hit its limit twice this week.";
+  const { items } = parseSuggestions(JSON.stringify({ suggestions: [long] })) as { items: string[] };
+  const item = items[0]!;
+  expect([...item].length).toBeLessThanOrEqual(MAX_SUGGESTION_CHARS);
+  expect(item).toEndWith("…");
+  const kept = item.slice(0, -1);
+  expect(long.startsWith(kept)).toBe(true);
+  expect(long[kept.length]).toBe(" ");
+});
+
+test("a Suggestion that only says the Setup is a DRAFT or to fill in prices is dropped (the DRAFT line says it)", () => {
+  const answer = JSON.stringify({
+    suggestions: [
+      "Fill in the plan prices in your Setup so the numbers can be weighed.",
+      "Your Setup is still a DRAFT; complete it.",
+      "Move code reviews to Codex: it reset with 62% wasted.",
+    ],
+  });
+  expect(parseSuggestions(answer)).toEqual({ ok: true, items: ["Move code reviews to Codex: it reset with 62% wasted."] });
 });
 
 test("malformed or missing JSON is a failure with a reason, not a throw", () => {

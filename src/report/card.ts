@@ -14,7 +14,7 @@ import { fitTelegram, TELEGRAM_TEXT_LIMIT } from "./telegram.ts";
  *   📊 Usage week · 5–12 Oct
  *   ▶ Running now       one line per running Cycle, a status dot each, worst first
  *   ✅ Last week        Cycles that reset, Limit Hits and Overage
- *   💡 Suggestions      numbered, each cut to ~140 characters
+ *   💡 Suggestions      numbered, each at most 120 characters (cut on a word boundary when parsed)
  *   ▸ Details           expandable blockquote: top Projects and models, tokens, coverage
  */
 

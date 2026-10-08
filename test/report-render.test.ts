@@ -53,6 +53,10 @@ test("long Suggestions are cut to about 140 characters in Telegram and kept whol
   const line = renderTelegram(report, { ...options, suggestions: s }).split("\n").find((l) => l.startsWith("1. "))!;
   expect(line.length).toBeLessThanOrEqual(3 + 140);
   expect(line).toEndWith("…");
+  // Cut on a word boundary: never mid-word.
+  const kept = line.slice(3, -1);
+  expect(long.startsWith(kept)).toBe(true);
+  expect(long[kept.length]).toMatch(/[\s,]/);
   expect(renderMarkdown(report, { ...options, suggestions: s })).toContain(long);
 });
 

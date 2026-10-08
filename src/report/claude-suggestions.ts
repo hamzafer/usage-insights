@@ -1,4 +1,5 @@
 import type { Report } from "./build.ts";
+import { clip } from "./format.ts";
 import { renderNumbers } from "./render.ts";
 import { isDraftSetup } from "./setup.ts";
 import type { Suggestions, SuggestionsProvider } from "./suggestions.ts";
@@ -11,6 +12,10 @@ import type { Suggestions, SuggestionsProvider } from "./suggestions.ts";
 
 /** A Report has at most this many Suggestions (spec §6). */
 export const MAX_SUGGESTIONS = 3;
+/** A Suggestion is at most this long, in the Markdown and the Telegram card alike. */
+export const MAX_SUGGESTION_CHARS = 120;
+/** A Suggestion about the Setup being a DRAFT or missing prices (the DRAFT line already says it). */
+const ABOUT_THE_DRAFT = /\bDRAFT\b|\bfill(?:ing)?\s+(?:in|out)\b/i;
 
 /** Claude behind an interface (a fake in tests). Throws an Error with a safe, key-free message. */
 export interface ClaudeClient {
@@ -65,9 +70,10 @@ function userPrompt(setup: string, report: Report, timeZone: string | undefined)
     `Write at most ${MAX_SUGGESTIONS} Suggestions for this week. Each one:`,
     "- is a concrete change to the Setup above, naming the Provider, plan or job from the Setup it concerns;",
     "- cites the number from this week's Report that motivates it;",
-    "- is one or two plain sentences, no Markdown.",
+    `- is one sentence of at most ${MAX_SUGGESTION_CHARS} characters, plain text, no Markdown.`,
     "Goals the Setup states come first. Fewer Suggestions (or none) is fine when the numbers do not support a change; never invent numbers.",
     "Where a price says unknown, do not guess it.",
+    "Never spend a Suggestion on the Setup itself being a DRAFT or on filling in its prices: the Report already says so.",
     'Answer with JSON only: {"suggestions": ["...", "..."]}',
   ].join("\n");
 }
@@ -78,7 +84,9 @@ function reason(e: unknown): string {
 
 /**
  * Reads Claude's answer: JSON `{"suggestions": [...]}` (or a bare array), also when it is wrapped in
- * prose or a code fence. Keeps at most 3 non-empty strings. Never throws.
+ * prose or a code fence. Keeps at most 3 non-empty strings, each cut to MAX_SUGGESTION_CHARS on a
+ * word boundary (so the Markdown and the Telegram card show the same text), and drops any that only
+ * say the Setup is a DRAFT or needs prices filled in (the Report's DRAFT line says that). Never throws.
  */
 export function parseSuggestions(answer: string): Suggestions {
   const value = findJson(answer);
@@ -88,8 +96,9 @@ export function parseSuggestions(answer: string): Suggestions {
   const items = list
     .filter((item): item is string => typeof item === "string")
     .map((item) => item.trim())
-    .filter((item) => item.length > 0)
-    .slice(0, MAX_SUGGESTIONS);
+    .filter((item) => item.length > 0 && !ABOUT_THE_DRAFT.test(item))
+    .slice(0, MAX_SUGGESTIONS)
+    .map((item) => clip(item, MAX_SUGGESTION_CHARS));
   return { ok: true, items };
 }
 
