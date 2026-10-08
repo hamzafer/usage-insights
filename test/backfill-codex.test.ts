@@ -99,6 +99,18 @@ test("a rerun reads only what was appended since, and finishes a line that was s
   expect(store.readingsWithRole(["cycle"]).map((r) => r.used)).toEqual([34, 35, 36]);
 });
 
+test("a log rewritten with other content (not shorter) is read again from the start", () => {
+  writeLog(LOG, [tokenCount("2026-10-08T10:00:05.000Z", session(12), weekly(34))]);
+  expect(backfillCodex({ sessionsDir, store, now: NOW }).linesRead).toBe(1);
+
+  writeLog(LOG, [
+    tokenCount("2026-10-08T11:00:05.000Z", session(20), weekly(40)),
+    tokenCount("2026-10-08T11:05:05.000Z", session(22), weekly(41)),
+  ]);
+  expect(backfillCodex({ sessionsDir, store, now: NOW })).toEqual({ files: 1, linesRead: 2, stored: 4 });
+  expect(store.readingsWithRole(["cycle"]).map((r) => r.used)).toEqual([34, 40, 41]);
+});
+
 test("the same readings logged twice (sub-agent logs, reruns) are stored once", () => {
   const line = tokenCount("2026-10-08T10:00:05.000Z", session(12), weekly(34));
   writeLog(LOG, [line, line]);

@@ -51,6 +51,16 @@ export interface Gap {
   reason: string;
 }
 
+/** How far a Backfill has read one log file. */
+export interface BackfillProgress {
+  /** Bytes read: the end of the last complete line. */
+  offset: number;
+  /** A hash of the file's first bytes (up to 4 KB, never past `offset`); null in rows from before it was kept. */
+  head: string | null;
+  /** The parser's state at `offset` (JSON), for parsers that need earlier lines; null when none. */
+  context: string | null;
+}
+
 /** The outcome of one Backfill or Report run (spec: Error handling: failures are visible). */
 export interface RunOutcome {
   /** `backfill:codex`, `backfill:tokens` or `report`. */
@@ -119,6 +129,10 @@ export const MIGRATIONS: string[] = [
      reason      TEXT
    );
    CREATE INDEX runs_by_job ON runs (job, at);`,
+  // A fingerprint of each log file's start, so a rewritten file is read again from the start, and
+  // the parser state at the offset, so a rerun need not read the file's earlier lines again.
+  `ALTER TABLE backfill_progress ADD COLUMN head TEXT;
+   ALTER TABLE backfill_progress ADD COLUMN context TEXT;`,
 ];
 
 /** How long a statement waits for another process's lock before failing. */
@@ -139,9 +153,9 @@ export interface Store {
   countReadings(): number;
   /** The plan of the provider's newest live Snapshot (not a Backfill), or null. */
   livePlan(provider: string): string | null;
-  /** Bytes of a log file a Backfill (`source`) has already read; 0 for a new file. */
-  backfillOffset(source: string, path: string): number;
-  saveBackfillOffset(source: string, path: string, offset: number): void;
+  /** How far a Backfill (`source`) has read a log file; null for a new file. */
+  backfillProgress(source: string, path: string): BackfillProgress | null;
+  saveBackfillProgress(source: string, path: string, progress: BackfillProgress): void;
   /**
    * Stores token events, one per key; a key seen again keeps its earliest time. Returns how many
    * keys were new.
@@ -254,17 +268,18 @@ export function openStore(path: string, options: { readonly?: boolean } = {}): S
             ORDER BY fetched_at DESC, id DESC LIMIT 1`,
         )
         .get(provider, LIVE_SOURCE)?.plan ?? null,
-    backfillOffset: (source, path) =>
+    backfillProgress: (source, path) =>
       db
-        .query<{ offset: number }, [string, string]>(
-          "SELECT offset FROM backfill_progress WHERE source = ? AND path = ?",
+        .query<BackfillProgress, [string, string]>(
+          "SELECT offset, head, context FROM backfill_progress WHERE source = ? AND path = ?",
         )
-        .get(source, path)?.offset ?? 0,
-    saveBackfillOffset: (source, path, offset) => {
+        .get(source, path),
+    saveBackfillProgress: (source, path, { offset, head, context }) => {
       db.query(
-        `INSERT INTO backfill_progress (source, path, offset) VALUES (?, ?, ?)
-           ON CONFLICT (source, path) DO UPDATE SET offset = excluded.offset`,
-      ).run(source, path, offset);
+        `INSERT INTO backfill_progress (source, path, offset, head, context) VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT (source, path) DO UPDATE
+             SET offset = excluded.offset, head = excluded.head, context = excluded.context`,
+      ).run(source, path, offset, head, context);
     },
     saveRun: (outcome) => {
       db.query("INSERT INTO runs (job, at, ok, reason) VALUES (?, ?, ?, ?)").run(

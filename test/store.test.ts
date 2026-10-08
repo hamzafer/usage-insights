@@ -126,8 +126,9 @@ test("a migration another process is applying is not applied twice", async () =>
   const holder = await holdWriteLock(path, 300, rest);
   const store = openStore(path);
   expect(await holder.done).toBe(0);
-  store.saveBackfillOffset("backfill:codex", "a.jsonl", 10);
-  expect(store.backfillOffset("backfill:codex", "a.jsonl")).toBe(10);
+  const progress = { offset: 10, head: "abc", context: null };
+  store.saveBackfillProgress("backfill:codex", "a.jsonl", progress);
+  expect(store.backfillProgress("backfill:codex", "a.jsonl")).toEqual(progress);
   store.close();
 
   const check = new Database(path);

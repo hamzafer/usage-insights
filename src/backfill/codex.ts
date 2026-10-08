@@ -1,8 +1,9 @@
 import { Glob } from "bun";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { classifyLine } from "../classify.ts";
 import type { Store, StoredReading } from "../store.ts";
+import { readNewLines } from "./log-reader.ts";
 
 /**
  * Codex Backfill (spec §4, Measured): rebuilds past Codex readings from the rate limits that
@@ -35,7 +36,7 @@ export interface CodexBackfillResult {
 /**
  * Reads every session log from where the last run stopped and stores its readings.
  * Rerunnable: readings are unique per line and time, and a line still being written is left
- * for the next run. A file that shrank (rewritten) is read again from the start.
+ * for the next run. A file that shrank or was rewritten is read again from the start.
  */
 export function backfillCodex({ sessionsDir, store, now = new Date(), plan = null }: CodexBackfillOptions): CodexBackfillResult {
   const recordedAt = now.toISOString();
@@ -44,21 +45,14 @@ export function backfillCodex({ sessionsDir, store, now = new Date(), plan = nul
 
   for (const relative of new Glob("**/rollout-*.jsonl").scanSync({ cwd: sessionsDir, onlyFiles: true })) {
     result.files++;
-    const bytes = readFileSync(join(sessionsDir, relative));
-    let offset = store.backfillOffset(CODEX_BACKFILL_SOURCE, relative);
-    if (offset > bytes.length) offset = 0;
-    const end = bytes.lastIndexOf(NEWLINE) + 1;
-    if (end <= offset) continue;
-
-    const lines = bytes.subarray(offset, end).toString("utf8").split("\n").slice(0, -1);
-    result.linesRead += lines.length;
-    result.stored += store.saveReadings(lines.flatMap((line) => readingsOfLine(line, recordedAt, plan)));
-    store.saveBackfillOffset(CODEX_BACKFILL_SOURCE, relative, end);
+    const read = readNewLines(store, CODEX_BACKFILL_SOURCE, join(sessionsDir, relative), relative);
+    if (!read) continue;
+    result.linesRead += read.lines.length;
+    result.stored += store.saveReadings(read.lines.flatMap((line) => readingsOfLine(line, recordedAt, plan)));
+    read.done();
   }
   return result;
 }
-
-const NEWLINE = 0x0a;
 
 interface RateWindow {
   used_percent?: unknown;

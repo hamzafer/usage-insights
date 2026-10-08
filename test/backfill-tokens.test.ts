@@ -158,6 +158,16 @@ test("reruns read only appended lines and store nothing twice", () => {
   expect(store.tokenUsage()).toHaveLength(2);
 });
 
+test("a transcript rewritten with other content (not shorter) is read again from the start", () => {
+  const path = claudeLog("claude", "-code-alpha/s1.jsonl");
+  write(path, [assistant("J", "2026-10-08T10:00:00.000Z", usage(1, 1))]);
+  backfillTokens({ ...sources, store });
+
+  write(path, [assistant("L", "2026-10-08T11:00:00.000Z", usage(2, 2)), assistant("M", "2026-10-08T11:01:00.000Z", usage(3, 3))]);
+  expect(backfillTokens({ ...sources, store })).toMatchObject({ linesRead: 2, stored: 2 });
+  expect(store.tokenUsage()).toHaveLength(3);
+});
+
 // Codex: model from the preceding turn_context, cwd from session_meta / turn_context, last_token_usage per call.
 
 function codexMeta(cwd: string): unknown {
@@ -215,6 +225,18 @@ test("Codex reruns keep the model and cwd of turns read by an earlier run", () =
 
   appendFileSync(path, `${JSON.stringify(tokenCount("2026-10-08T10:00:09.000Z", 300, { input: 100, cached: 0, output: 200 }))}\n`);
   expect(backfillTokens({ ...sources, store }).stored).toBe(1);
+  expect(store.tokenUsage()[0]).toMatchObject({ model: "gpt-5.6-luna", project: repoDir });
+});
+
+test("progress saved before fingerprints were kept still resumes at its offset, with the earlier turns' model", () => {
+  const path = join(sources.codexDir, CODEX_LOG);
+  const before = [codexMeta(join(root, "elsewhere")), turn("gpt-5.6-luna", repoDir)];
+  write(path, before);
+  const offset = before.map((l) => `${JSON.stringify(l)}\n`).join("").length;
+  store.saveBackfillProgress("tokens:codex", CODEX_LOG, { offset, head: null, context: null });
+
+  appendFileSync(path, `${JSON.stringify(tokenCount("2026-10-08T10:00:09.000Z", 300, { input: 100, cached: 0, output: 200 }))}\n`);
+  expect(backfillTokens({ ...sources, store })).toMatchObject({ linesRead: 1, stored: 1 });
   expect(store.tokenUsage()[0]).toMatchObject({ model: "gpt-5.6-luna", project: repoDir });
 });
 
