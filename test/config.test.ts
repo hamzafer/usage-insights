@@ -20,3 +20,8 @@ test("environment overrides the data directory and the OpenUsage URL", () => {
   expect(config.dbPath).toBe("/tmp/ui-data/usage.db");
   expect(config.openUsageUrl).toBe("http://127.0.0.1:9999/v1/usage");
 });
+
+test("Codex session logs: ~/.codex/sessions unless USAGE_INSIGHTS_CODEX_DIR says otherwise", () => {
+  expect(loadConfig({}, "/home/someone").codexSessionsDir).toBe("/home/someone/.codex/sessions");
+  expect(loadConfig({ USAGE_INSIGHTS_CODEX_DIR: "/tmp/codex" }, "/home/someone").codexSessionsDir).toBe("/tmp/codex");
+});
