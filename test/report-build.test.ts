@@ -64,6 +64,43 @@ describe("buildReport: the 7 days before now", () => {
   });
 });
 
+test("a Claude Cycle without a Measured Waste gets its Estimated Waste once calibrated, never mixed with Measured", () => {
+  // Calibration from the running Cycle: 10 hourly intervals of +2% with 10k tokens each, so 5k tokens per 1%.
+  const live = Array.from({ length: 11 }, (_, i) => ({
+    provider: "claude-work",
+    label: "Weekly",
+    role: "cycle" as const,
+    used: 10 + 2 * i,
+    limit: 100,
+    resetsAt: "2026-10-15T09:00:00.000Z",
+    fetchedAt: new Date(Date.parse("2026-10-11T00:00:00.000Z") + i * H).toISOString(),
+    source: "openusage",
+  }));
+  const event = (at: string, total: number) => ({
+    provider: "claude-work",
+    at,
+    project: "/repos/alpha",
+    model: "claude-opus",
+    input: total,
+    cacheWrite: 0,
+    cacheRead: 0,
+    output: 0,
+  });
+  const calibrating = live.slice(1).map((r) => event(new Date(Date.parse(r.fetchedAt) - 30 * 60_000).toISOString(), 10_000));
+  // The Cycle before (10-01 09:00 to 10-08 09:00, stepped back from the recorded Reset): 300k tokens, 60% used.
+  const past = [event("2026-10-03T10:00:00.000Z", 300_000)];
+
+  const r = buildReport({ ...input, readings: [...input.readings, ...live], tokens: [...input.tokens, ...past, ...calibrating] });
+  const estimated = r.cycleWaste.find((c) => c.provider === "claude-work")!;
+  expect([estimated.resetAt, estimated.waste?.share, estimated.waste?.basis, estimated.inferred]).toEqual([
+    "2026-10-08T09:00:00.000Z",
+    0.4,
+    "estimated",
+    true,
+  ]);
+  expect(r.trend.waste.find((w) => w.provider === "claude-work")).toMatchObject({ basis: "estimated", thisWeek: 0.4 });
+});
+
 test("an empty store builds a Report that says there is no data", () => {
   const empty = buildReport({ readings: [], gaps: [], tokens: [], now: "2026-10-12T09:00:00.000Z" });
   expect(empty.cycleWaste).toEqual([]);

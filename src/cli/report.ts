@@ -34,15 +34,12 @@ try {
       { name: "Codex", run: () => void backfillCodex({ sessionsDir: config.codexSessionsDir, store: db(), plan: db().livePlan("codex") }) },
       { name: "Token", run: () => void backfillTokens({ claude: config.claudeProjectDirs, codexDir: config.codexSessionsDir, store: db() }) },
     ],
-    load: () => {
-      const now = Date.now();
-      return {
-        readings: db().readingsWithRole(["cycle", "session", "overage"]),
-        gaps: db().allGaps(),
-        // The Report's week and the 4 weeks before it.
-        tokens: db().tokenUsage({ from: new Date(now - 5 * 7 * 24 * 3_600_000).toISOString() }),
-      };
-    },
+    load: () => ({
+      readings: db().readingsWithRole(["cycle", "session", "overage"]),
+      gaps: db().allGaps(),
+      // All of them: the Claude calibration learns from every live Snapshot interval.
+      tokens: db().tokenUsage(),
+    }),
     // Token and chat id are read from the Telegram plugin's state at send time, never stored here.
     messenger: new TelegramMessenger(),
     // EXTENSION POINT (ticket #10): pass the Claude Suggestions provider here.

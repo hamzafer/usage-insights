@@ -30,6 +30,23 @@ test("Suggestions, when given, appear in the Markdown and the Telegram message",
   expect(renderMarkdown(report, { ...options, suggestions: failed })).toContain("Suggestions could not be written: API unreachable");
 });
 
+test("Estimated Waste is marked ~, and a stepped Cycle span says its dates are inferred", () => {
+  const estimated = {
+    ...report,
+    cycleWaste: [
+      {
+        provider: "claude-work",
+        label: "Weekly",
+        resetAt: "2026-10-08T09:00:00.000Z",
+        waste: { share: 0.4, lastReadingAt: "2026-10-08T09:00:00.000Z", lowConfidence: false, basis: "estimated" as const },
+        inferred: true,
+      },
+    ],
+  };
+  expect(renderTelegram(estimated, options)).toContain("- claude-work Weekly: ~40% (dates inferred)");
+  expect(renderNumbers(estimated, options)).toContain("| claude-work | Weekly | 2026-10-08 09:00 | ~40% (dates inferred) |");
+});
+
 test("an empty week says so instead of showing zeros", () => {
   const empty = buildReport({ readings: [], gaps: [], tokens: [], now: "2026-10-12T09:00:00.000Z" });
   const text = renderTelegram(empty, options);

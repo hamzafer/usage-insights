@@ -1,3 +1,4 @@
+import { claudeCalibration } from "../calibration.ts";
 import { findLimitHits, type LimitHit } from "../limits.ts";
 import { overageUnit } from "../overage.ts";
 import { type Pace, paceOfRunningCycles } from "../pace.ts";
@@ -16,7 +17,7 @@ export interface ReportInput {
   readings: readonly Reading[];
   /** Recorder gap markers: time around them is unknown. */
   gaps: readonly GapMarker[];
-  /** Token events covering at least the Report's week and the 4 weeks before it. */
+  /** Token events: at least the Report's week and the 4 weeks before it; all of them for the Claude calibration. */
   tokens: readonly TokenEvent[];
   now: string;
   /** Problems getting fresh data (e.g. a failed Backfill), shown in the Report as they are. */
@@ -28,8 +29,10 @@ export interface CycleWaste {
   label: string;
   /** The Cycle's Reset, within the week. */
   resetAt: string;
-  /** Null when it cannot be measured (e.g. no limit in the readings). */
+  /** Null when it cannot be measured (e.g. no limit in the readings). Estimated (Claude, from tokens) is marked by its basis. */
   waste: Waste | null;
+  /** Estimated only: the Cycle's span was stepped from a recorded Reset, not recorded itself. */
+  inferred?: boolean;
 }
 
 export interface WeekLimitHit extends LimitHit {
@@ -117,24 +120,20 @@ export function buildReport(input: ReportInput): Report {
   const readingWeeks = previous.filter((w) => firstReading < w.to);
   const tokenWeeks = previous.filter((w) => firstToken < w.to);
 
+  const ended = endedCycleWaste(windows, input);
   const weekHits = hitsBetween(hits, fromMs, toMs, toMs);
   const tokensBetween = (from: number, to: number) => topUsage(input.tokens, { from: iso(from), to: iso(to) }).total;
 
   return {
     from: iso(fromMs),
     to: iso(toMs),
-    cycleWaste: endedCycles(windows, fromMs, toMs).map((w) => ({
-      provider: w.provider,
-      label: w.label,
-      resetAt: w.endedAt!,
-      waste: w.waste,
-    })),
+    cycleWaste: resetBetween(ended, fromMs, toMs),
     pace: paceOfRunningCycles(windows),
     limitHits: weekHits,
     overage: overageBetween(overageReadings, fromMs, toMs),
     top: topUsage(input.tokens, { from: iso(fromMs), to: iso(toMs), limit: REPORT_TOP }),
     trend: {
-      waste: wasteTrend(windows, fromMs, toMs),
+      waste: wasteTrend(ended, fromMs, toMs),
       limitHits: trendOf(weekHits.length, readingWeeks.map((w) => hitsBetween(hits, w.from, w.to, toMs).length)),
       blockedMs: trendOf(
         sumBlocked(weekHits),
@@ -153,9 +152,29 @@ export function buildReport(input: ReportInput): Report {
   };
 }
 
+/**
+ * Final Waste of every ended Cycle: Measured from the Window Model, plus Claude's Estimated Waste
+ * (ticket #8) for Cycles without a Measured one. The two stay apart by their basis.
+ */
+function endedCycleWaste(windows: readonly Window[], input: ReportInput): CycleWaste[] {
+  const measured = windows
+    .filter((w) => w.role === "cycle" && w.endedAt)
+    .map((w) => ({ provider: w.provider, label: w.label, resetAt: w.endedAt!, waste: w.waste }));
+  const estimated = claudeCalibration(input.readings, input.tokens, input.now).estimates.map((e) => ({
+    provider: e.provider,
+    label: e.label,
+    resetAt: e.to,
+    waste: { share: e.share, lastReadingAt: e.to, lowConfidence: false, basis: e.basis },
+    inferred: e.inferred,
+  }));
+  return [...measured, ...estimated].toSorted(
+    (a, b) => compare(a.provider, b.provider) || compare(a.label, b.label) || ms(a.resetAt) - ms(b.resetAt),
+  );
+}
+
 /** Cycles whose Reset falls in `from`..`to` (end inclusive: a Reset at `now` counts). */
-function endedCycles(windows: readonly Window[], from: number, to: number): Window[] {
-  return windows.filter((w) => w.role === "cycle" && w.endedAt && ms(w.endedAt) >= from && ms(w.endedAt) < to + 1);
+function resetBetween(cycles: readonly CycleWaste[], from: number, to: number): CycleWaste[] {
+  return cycles.filter((c) => ms(c.resetAt) >= from && ms(c.resetAt) <= to);
 }
 
 /** Limit Hits whose Blocked Time overlaps `from`..`to`, with the overlap. */
@@ -191,21 +210,22 @@ function overageBetween(readings: readonly Reading[], from: number, to: number):
   return out.toSorted((a, b) => compare(a.provider, b.provider) || compare(a.label, b.label));
 }
 
-function wasteTrend(windows: readonly Window[], from: number, to: number): WasteTrend[] {
-  const recent = endedCycles(windows, from, to).filter((w) => w.waste);
-  const earlier = endedCycles(windows, from - TREND_WEEKS * WEEK_MS, from - 1).filter((w) => w.waste);
-  const key = (w: Window) => `${w.provider}\u0000${w.label}\u0000${w.waste!.basis}`;
+function wasteTrend(cycles: readonly CycleWaste[], from: number, to: number): WasteTrend[] {
+  const withWaste = cycles.filter((c) => c.waste);
+  const recent = resetBetween(withWaste, from, to);
+  const earlier = resetBetween(withWaste, from - TREND_WEEKS * WEEK_MS, from - 1);
+  const key = (c: CycleWaste) => `${c.provider}\u0000${c.label}\u0000${c.waste!.basis}`;
   const keys = [...new Set([...recent, ...earlier].map(key))].toSorted();
   return keys.map((k) => {
-    const mine = recent.filter((w) => key(w) === k);
-    const before = earlier.filter((w) => key(w) === k);
+    const mine = recent.filter((c) => key(c) === k);
+    const before = earlier.filter((c) => key(c) === k);
     const [provider, label, basis] = k.split("\u0000") as [string, string, Basis];
     return {
       provider,
       label,
       basis,
-      thisWeek: average(mine.map((w) => w.waste!.share)),
-      previous: average(before.map((w) => w.waste!.share)),
+      thisWeek: average(mine.map((c) => c.waste!.share)),
+      previous: average(before.map((c) => c.waste!.share)),
       previousCycles: before.length,
     };
   });

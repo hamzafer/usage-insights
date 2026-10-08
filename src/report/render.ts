@@ -2,7 +2,7 @@ import type { Pace } from "../pace.ts";
 import { formatTokens } from "../summary.ts";
 import type { Share } from "../token-shares.ts";
 import type { Waste } from "../window-model.ts";
-import { type Report, TREND_WEEKS, type WeekTrend } from "./build.ts";
+import { type CycleWaste, type Report, TREND_WEEKS, type WeekTrend } from "./build.ts";
 import type { Suggestions } from "./suggestions.ts";
 
 /**
@@ -43,7 +43,7 @@ export function renderNumbers(report: Report, options: RenderOptions = {}): stri
   else {
     out.push("| Provider | Cycle | Reset | Waste |", "|---|---|---|---|");
     for (const c of report.cycleWaste) {
-      out.push(`| ${c.provider} | ${c.label} | ${at(c.resetAt)} | ${wasteText(c.waste, c.resetAt)} |`);
+      out.push(`| ${c.provider} | ${c.label} | ${at(c.resetAt)} | ${cycleWasteText(c)} |`);
     }
   }
 
@@ -97,7 +97,7 @@ export function renderTelegram(report: Report, options: RenderOptions = {}): str
   if (report.cycleWaste.length === 0) out.push("No Cycle reset this week.");
   else {
     out.push("Waste (Cycles reset this week)");
-    for (const c of report.cycleWaste) out.push(`- ${c.provider} ${c.label}: ${wasteText(c.waste, c.resetAt)}`);
+    for (const c of report.cycleWaste) out.push(`- ${c.provider} ${c.label}: ${cycleWasteText(c)}`);
   }
   if (report.pace.length) {
     out.push("Pace (running Cycles)");
@@ -162,6 +162,11 @@ function suggestionLines(s: Suggestions): string[] {
   if (!s.ok) return [`Suggestions could not be written: ${s.reason}`];
   if (s.items.length === 0) return ["No Suggestions this week."];
   return s.items.map((item, i) => `${i + 1}. ${item}`);
+}
+
+function cycleWasteText(c: CycleWaste): string {
+  const text = wasteText(c.waste, c.resetAt);
+  return c.inferred ? `${text} (dates inferred)` : text;
 }
 
 function wasteText(waste: Waste | null, resetAt: string): string {
