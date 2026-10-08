@@ -1,0 +1,60 @@
+[
+  {
+    "providerId": "claude",
+    "displayName": "Claude",
+    "plan": "Pro",
+    "fetchedAt": "2026-01-05T10:00:01.123456Z",
+    "lines": [
+      { "type": "progress", "label": "Session", "used": 25.0, "limit": 100.0, "format": { "kind": "percent" }, "resetsAt": "2026-01-05T13:00:00.111Z", "periodDurationMs": 18000000, "color": null },
+      { "type": "progress", "label": "Weekly", "used": 40.0, "limit": 100.0, "format": { "kind": "percent" }, "resetsAt": "2026-01-09T08:00:00.111Z", "periodDurationMs": 604800000, "color": null },
+      { "type": "text", "label": "Today", "value": "1.0M tokens" },
+      { "type": "barChart", "label": "Usage Trend", "points": [1, 2, 3] },
+      { "type": "text", "label": "model-a", "value": "50%" }
+    ]
+  },
+  {
+    "providerId": "claude-work",
+    "displayName": "Claude (Work)",
+    "plan": "Team",
+    "fetchedAt": "2026-01-05T10:00:02.000000Z",
+    "lines": [
+      { "type": "progress", "label": "Session", "used": 3.0, "limit": 100.0, "format": { "kind": "percent" }, "resetsAt": "2026-01-05T14:00:00.222Z", "periodDurationMs": 18000000, "color": null },
+      { "type": "progress", "label": "Weekly", "used": 5.0, "limit": 100.0, "format": { "kind": "percent" }, "resetsAt": "2026-01-10T09:00:00.222Z", "periodDurationMs": 604800000, "color": null },
+      { "type": "progress", "label": "Extra usage spent", "used": 2.5, "limit": 50.0, "format": { "kind": "dollars" }, "resetsAt": null, "periodDurationMs": null, "color": null }
+    ]
+  },
+  {
+    "providerId": "codex",
+    "displayName": "Codex",
+    "plan": "Plus",
+    "fetchedAt": "2026-01-05T10:00:03.000000Z",
+    "lines": [
+      { "type": "progress", "label": "Session", "used": 15.0, "limit": 100.0, "format": { "kind": "percent" }, "resetsAt": "2026-01-05T12:30:00.000Z", "periodDurationMs": 18000000, "color": null },
+      { "type": "progress", "label": "Weekly", "used": 20.0, "limit": 100.0, "format": { "kind": "percent" }, "resetsAt": "2026-01-11T06:00:00.000Z", "periodDurationMs": 604800000, "color": null },
+      { "type": "text", "label": "Rate Limit Resets", "value": "in 2h" },
+      { "type": "progress", "label": "Workspace Credits", "used": 10.0, "limit": 100.0, "format": { "kind": "count", "suffix": "credits" }, "resetsAt": "2026-02-01T00:00:00.000Z", "periodDurationMs": null, "color": null }
+    ]
+  },
+  {
+    "providerId": "cursor",
+    "displayName": "Cursor",
+    "plan": "Pro",
+    "fetchedAt": "2026-01-05T10:00:04.000000Z",
+    "lines": [
+      { "type": "progress", "label": "Total usage", "used": 4.2, "limit": 20.0, "format": { "kind": "dollars" }, "resetsAt": "2026-01-20T00:00:00.000Z", "periodDurationMs": 2592000000, "color": null },
+      { "type": "progress", "label": "Auto usage", "used": 1.5, "limit": 100.0, "format": { "kind": "percent" }, "resetsAt": "2026-01-20T00:00:00.000Z", "periodDurationMs": 2592000000, "color": null },
+      { "type": "progress", "label": "API usage", "used": 0.0, "limit": 100.0, "format": { "kind": "percent" }, "resetsAt": "2026-01-20T00:00:00.000Z", "periodDurationMs": 2592000000, "color": null },
+      { "type": "progress", "label": "On-demand", "used": 0.0, "limit": 100.0, "format": { "kind": "dollars" }, "resetsAt": null, "periodDurationMs": null, "color": null }
+    ]
+  },
+  {
+    "providerId": "copilot",
+    "displayName": "Copilot",
+    "plan": "Pro",
+    "fetchedAt": "2026-01-05T10:00:05.000000Z",
+    "lines": [
+      { "type": "progress", "label": "Premium", "used": 8.0, "limit": 100.0, "format": { "kind": "percent" }, "resetsAt": "2026-02-01T00:00:00.000Z", "periodDurationMs": 2592000000, "color": null },
+      { "type": "progress", "label": "Chat", "used": 0.0, "limit": 100.0, "format": { "kind": "percent" }, "resetsAt": "2026-02-01T00:00:00.000Z", "periodDurationMs": 2592000000, "color": null }
+    ]
+  }
+]
