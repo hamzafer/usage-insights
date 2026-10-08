@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
 import type { LineRole } from "./classify.ts";
+import type { Reading } from "./window-model.ts";
 
 /** One stored progress line of one Snapshot. */
 export interface StoredReading {
@@ -57,6 +58,8 @@ export interface Store {
   saveGap(gap: Gap): void;
   /** The newest reading of every (provider, label), sorted by provider then label. */
   latestReadings(): StoredReading[];
+  /** Readings of the given roles, as the Window Model takes them: by provider, label, then time. */
+  readingsWithRole(roles: LineRole[]): Reading[];
   /** The newest gaps first. */
   recentGaps(limit: number): Gap[];
   countReadings(): number;
@@ -96,6 +99,16 @@ export function openStore(path: string): Store {
             ORDER BY provider, label`,
         )
         .all(),
+    readingsWithRole: (roles) =>
+      db
+        .query<Reading, string[]>(
+          `SELECT provider, label, role, used, "limit", resets_at AS resetsAt,
+                  fetched_at AS fetchedAt, source
+             FROM readings
+            WHERE role IN (${roles.map(() => "?").join(", ")})
+            ORDER BY provider, label, fetched_at, id`,
+        )
+        .all(...roles),
     recentGaps: (limit) =>
       db
         .query<Gap, [number]>(
