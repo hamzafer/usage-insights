@@ -50,6 +50,8 @@ function readingsOfLine(line: string, recordedAt: string): StoredReading[] {
   }
   const limits = event?.payload?.type === "token_count" ? event.payload.rate_limits : null;
   if (!limits || typeof event.timestamp !== "string") return [];
+  // Only the main Codex limit (named `codex` since 2026-03, unnamed before); `premium` and others are separate meters.
+  if (limits.limit_id != null && limits.limit_id !== "codex") return [];
   const fetchedAt = new Date(event.timestamp).toISOString();
   return [limits.primary, limits.secondary].flatMap((w: RateWindow | null) => {
     const label = w ? labelOf(w.window_minutes) : null;

@@ -84,3 +84,31 @@ test("token_count rate limits become Session and Weekly readings with a backfill
     { ...base, label: "Weekly", role: "cycle", used: 34, resetsAt: "2026-10-12T00:00:00.000Z" },
   ]);
 });
+
+test("skips lines it cannot measure: no Reset (2025), no windows, other limits, broken JSON", () => {
+  writeLog("2025/10/02/rollout-2025-10-02T13-00-00-a.jsonl", [
+    sessionMeta("2025-10-02T11:00:00.000Z"),
+    tokenCount("2025-10-02T11:15:27.205Z", { used_percent: 5, window_minutes: 299, resets_at: null }, { used_percent: 9, window_minutes: 10079, resets_at: null }, { limit_id: null, plan_type: null }),
+  ]);
+  writeLog(LOG, [
+    sessionMeta("2026-10-08T10:00:00.000Z"),
+    '{"timestamp":"2026-10-08T10:00:01.000Z","type":"event_msg","payload":{"type":"token_count","info":null,"rate_limits":null}}',
+    tokenCount("2026-10-08T10:00:02.000Z", null, null, { limit_id: "premium", plan_type: null }),
+    tokenCount("2026-10-08T10:00:03.000Z", session(80), weekly(80), { limit_id: "other" }),
+    '{"timestamp":"2026-10-08T10:00:04.000Z","type":"token_usage_record","payload":{"usage":{"total_tokens":1}}}',
+    '{"timestamp":"2026-10-08T10:00:04.500Z","type":"event_msg","payload":{"type":"token_cou',
+    // Older logs: 299 / 10079 minutes and no plan. Then a weekly-only line in `primary`.
+    tokenCount("2026-10-08T10:00:05.000Z", { used_percent: 12, window_minutes: 299, resets_at: SESSION_RESET }, { used_percent: 34, window_minutes: 10079, resets_at: WEEKLY_RESET }, { limit_id: null, plan_type: null }),
+    tokenCount("2026-10-08T10:00:06.000Z", weekly(35), null),
+  ]);
+  writeLog("2025/09/06/rollout-2025-09-06T19-47-49-legacy.jsonl", ['{"id":"x","timestamp":"2025-09-06T17:47:49.000Z","instructions":null}', '{"record_type":"state"}']);
+
+  const result = backfillCodex({ sessionsDir, store, now: NOW });
+
+  expect(result.stored).toBe(3);
+  expect(store.readingsWithRole(["session", "cycle"]).map((r) => [r.label, r.used, r.fetchedAt])).toEqual([
+    ["Session", 12, "2026-10-08T10:00:05.000Z"],
+    ["Weekly", 34, "2026-10-08T10:00:05.000Z"],
+    ["Weekly", 35, "2026-10-08T10:00:06.000Z"],
+  ]);
+});
