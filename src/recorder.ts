@@ -35,9 +35,18 @@ export async function record(
       resetsAt: line.resetsAt,
       periodMs: line.periodMs,
       plan: reading.plan,
-      fetchedAt: reading.fetchedAt,
+      fetchedAt: normalizeTime(reading.fetchedAt),
       recordedAt,
     })),
   );
   return { ok: true, stored: store.saveReadings(rows) };
+}
+
+/**
+ * One form for every stored time (`toISOString`, UTC), so the same instant written another way
+ * is the same reading and times sort as text. A time that does not parse is kept as given.
+ */
+function normalizeTime(time: string): string {
+  const ms = Date.parse(time);
+  return Number.isNaN(ms) ? time : new Date(ms).toISOString();
 }

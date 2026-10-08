@@ -94,6 +94,14 @@ describe("record", () => {
     expect(store.countReadings()).toBe(3);
   });
 
+  test("fetch times are stored in one form, so the same instant written another way is a no-op", async () => {
+    await record(fakeSource([{ ...claude, fetchedAt: "2026-01-05T11:00:00+01:00" }]), store, new Date("2026-01-05T10:00:05Z"));
+    const second = await record(fakeSource([{ ...claude, fetchedAt: "2026-01-05T10:00:00Z" }]), store, new Date("2026-01-05T10:05:05Z"));
+
+    expect(second).toEqual({ ok: true, stored: 0 });
+    expect(store.latestReadings().map((r) => r.fetchedAt)).toEqual(Array(3).fill("2026-01-05T10:00:00.000Z"));
+  });
+
   test("a newer reading is stored and becomes the latest", async () => {
     await record(fakeSource([claude]), store, new Date("2026-01-05T10:00:05Z"));
     const later: ProviderReading = {

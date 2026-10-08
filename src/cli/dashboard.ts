@@ -8,10 +8,12 @@ import { dashboardHandler } from "../dashboard/server.ts";
 const config = loadConfig();
 mkdirSync(config.dataDir, { recursive: true });
 
+const port = dashboardPort();
 const server = Bun.serve({
   hostname: "127.0.0.1",
-  port: dashboardPort(),
-  fetch: dashboardHandler({ load: () => loadDashboardData(config.dbPath) }),
+  port,
+  // `port` also limits the Host header to 127.0.0.1 or localhost at this port (DNS rebinding).
+  fetch: dashboardHandler({ load: () => loadDashboardData(config.dbPath), port }),
 });
 
 console.log(`Usage Insights dashboard on http://127.0.0.1:${server.port}`);

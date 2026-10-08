@@ -13,6 +13,20 @@ export interface DashboardDeps {
   timeZone?: string;
   /** Where load failures are reported (stderr by default). */
   log?: (message: string) => void;
+  /** The port it listens on; when given, only `localhost` or `127.0.0.1` at this port are served. */
+  port?: number;
+}
+
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1"]);
+
+/**
+ * Guards against DNS rebinding: a web page on another site whose name resolves to 127.0.0.1
+ * sends its own name as Host, so only the local names (at the dashboard's port) are served.
+ */
+function isLocalHost(host: string, port: number | undefined): boolean {
+  const match = /^([^:]+)(?::(\d+))?$/.exec(host.toLowerCase());
+  if (!match || !LOCAL_HOSTS.has(match[1]!)) return false;
+  return port === undefined || Number(match[2] ?? 80) === port;
 }
 
 export function dashboardHandler(deps: DashboardDeps): (req: Request) => Response {
@@ -23,6 +37,9 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
     const url = new URL(req.url);
     const at = now();
     const ctxBase = { timeZone: deps.timeZone, now: at.toISOString() };
+    if (!isLocalHost(req.headers.get("host") ?? url.host, deps.port)) {
+      return new Response("Forbidden: open the dashboard at 127.0.0.1 or localhost", { status: 403 });
+    }
     if (req.method !== "GET" && req.method !== "HEAD") {
       return new Response("Method not allowed", { status: 405, headers: { allow: "GET, HEAD" } });
     }
@@ -49,7 +66,8 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
     if (path === "/projects") return html(renderProjects(buildProjects(data, at), ctx));
     if (path === "/api/projects") return json(buildProjects(data, at));
     if (provider !== undefined) {
-      const history = buildHistory(data, decodeURIComponent(provider), at);
+      const id = decodePathPart(provider);
+      const history = id === null ? null : buildHistory(data, id, at);
       const api = path.startsWith("/api/");
       if (!history) {
         return api
@@ -62,6 +80,15 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
       ? json({ error: "Not found" }, 404)
       : html(renderMessage("Page not found", "Pick a page from the navigation above.", ctx), 404);
   };
+}
+
+/** A decoded path segment; null when it is not valid percent-encoding. */
+function decodePathPart(part: string): string | null {
+  try {
+    return decodeURIComponent(part);
+  } catch {
+    return null;
+  }
 }
 
 function html(body: string, status = 200): Response {

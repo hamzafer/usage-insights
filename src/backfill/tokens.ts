@@ -1,8 +1,9 @@
 import { Glob } from "bun";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { createProjectResolver, type ProjectResolver } from "../projects.ts";
 import type { KeyedTokenEvent, Store } from "../store.ts";
+import { type NewLines, readNewLines } from "./log-reader.ts";
 
 /**
  * Token Backfill (spec §4, ticket #7): tokens per API call, Project and model, from Claude Code
@@ -49,13 +50,14 @@ export function backfillTokens({ claude, codexDir, store, resolver = createProje
   };
   for (const source of claude) {
     for (const file of logFiles(source.dir, "**/*.jsonl")) {
-      add(readNewLines(store, `tokens:${source.provider}`, source.dir, file, (lines) =>
-        lines.flatMap((line) => claudeEvent(line, source.provider, resolver)),
-      ));
+      add(readFile(store, `tokens:${source.provider}`, source.dir, file, (read) => ({
+        events: read.lines.flatMap((line) => claudeEvent(line, source.provider, resolver)),
+        context: null,
+      })));
     }
   }
   for (const file of logFiles(codexDir, "**/rollout-*.jsonl")) {
-    add(readNewLines(store, `tokens:${CODEX_PROVIDER}`, codexDir, file, (lines, before) => codexEvents(file, lines, before(), resolver)));
+    add(readFile(store, `tokens:${CODEX_PROVIDER}`, codexDir, file, (read) => codexEvents(file, read, resolver)));
   }
   return result;
 }
@@ -65,31 +67,20 @@ function logFiles(dir: string, pattern: string): string[] {
   return [...new Glob(pattern).scanSync({ cwd: dir, onlyFiles: true })].toSorted();
 }
 
-const NEWLINE = 0x0a;
-
-/**
- * Hands the complete lines appended since the last run to `parse` and stores its events. A line
- * still being written is left for the next run; a file that shrank is read again from the start.
- * `before()` gives the lines already read, for parsers that need earlier context.
- */
-function readNewLines(
+/** Hands the lines appended since the last run to `parse`, stores its events and saves its state. */
+function readFile(
   store: Store,
   source: string,
   dir: string,
   relative: string,
-  parse: (lines: string[], before: () => string[]) => KeyedTokenEvent[],
+  parse: (read: NewLines) => { events: KeyedTokenEvent[]; context: string | null },
 ): { linesRead: number; stored: number } {
-  const bytes = readFileSync(join(dir, relative));
-  let offset = store.backfillOffset(source, relative);
-  if (offset > bytes.length) offset = 0;
-  const end = bytes.lastIndexOf(NEWLINE) + 1;
-  if (end <= offset) return { linesRead: 0, stored: 0 };
-
-  const lines = bytes.subarray(offset, end).toString("utf8").split("\n").slice(0, -1);
-  const before = () => (offset ? bytes.subarray(0, offset).toString("utf8").split("\n") : []);
-  const stored = store.saveTokenEvents(parse(lines, before));
-  store.saveBackfillOffset(source, relative, end);
-  return { linesRead: lines.length, stored };
+  const read = readNewLines(store, source, join(dir, relative), relative);
+  if (!read) return { linesRead: 0, stored: 0 };
+  const { events, context } = parse(read);
+  const stored = store.saveTokenEvents(events);
+  read.done(context);
+  return { linesRead: read.lines.length, stored };
 }
 
 function parse(line: string): any {
@@ -151,8 +142,12 @@ function repoName(url: unknown): string | null {
  * model and cwd of the latest turn before it. A repeated event (same cumulative total) is the
  * same call. `token_usage_record` lines duplicate `token_count` and are not read.
  */
-function codexEvents(file: string, lines: string[], earlier: string[], resolver: ProjectResolver): KeyedTokenEvent[] {
-  const context = { model: UNKNOWN_MODEL, cwd: "", repo: null as string | null };
+function codexEvents(
+  file: string,
+  read: NewLines,
+  resolver: ProjectResolver,
+): { events: KeyedTokenEvent[]; context: string } {
+  const context: CodexContext = { model: UNKNOWN_MODEL, cwd: "", repo: null };
   const track = (entry: any) => {
     const p = entry?.payload;
     if (entry?.type === "session_meta") {
@@ -164,12 +159,18 @@ function codexEvents(file: string, lines: string[], earlier: string[], resolver:
       if (typeof p?.model === "string" && p.model) context.model = p.model;
     }
   };
-  for (const line of earlier) {
-    if (line.includes('"turn_context"') || line.includes('"session_meta"')) track(parse(line));
+  // The state the last run saved; without one (progress from before it was kept), the lines it
+  // read are read again for it.
+  const saved = savedContext(read.context);
+  if (saved) Object.assign(context, saved);
+  else {
+    for (const line of read.earlier()) {
+      if (line.includes('"turn_context"') || line.includes('"session_meta"')) track(parse(line));
+    }
   }
 
   const events: KeyedTokenEvent[] = [];
-  for (const line of lines) {
+  for (const line of read.lines) {
     const isContext = line.includes('"turn_context"') || line.includes('"session_meta"');
     if (!isContext && !line.includes('"token_count"')) continue;
     const entry = parse(line);
@@ -198,5 +199,18 @@ function codexEvents(file: string, lines: string[], earlier: string[], resolver:
       output,
     });
   }
-  return events;
+  return { events, context: JSON.stringify(context) };
+}
+
+/** The model, cwd and repository of the latest turn: what a Codex call is attributed to. */
+interface CodexContext {
+  model: string;
+  cwd: string;
+  repo: string | null;
+}
+
+function savedContext(json: string | null): CodexContext | null {
+  const value = json === null ? null : parse(json);
+  if (!value || typeof value.model !== "string" || typeof value.cwd !== "string") return null;
+  return { model: value.model, cwd: value.cwd, repo: typeof value.repo === "string" ? value.repo : null };
 }

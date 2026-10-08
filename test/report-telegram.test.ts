@@ -101,3 +101,15 @@ test("cutting HTML keeps it valid: whole lines only, open tags closed", () => {
   expect(cut).not.toContain("&amp\n");
   expect(fitTelegram("<b>short</b>")).toBe("<b>short</b>");
 });
+
+test("a stray closing tag before the cut does not drop the tags still open", () => {
+  const text = `<i>note</b>${"x".repeat(5000)}`;
+  expect(fitTelegram(text)).toEndWith("(cut)</i>");
+});
+
+test("a cut never splits an emoji (no lone surrogate)", () => {
+  const cut = fitTelegram(`a${"😀".repeat(3000)}`);
+  expect(cut.length).toBeLessThanOrEqual(TELEGRAM_TEXT_LIMIT);
+  expect(cut).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+  expect(cut).toEndWith("😀\n(cut)");
+});

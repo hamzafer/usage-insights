@@ -112,10 +112,12 @@ export function fitTelegram(text: string): string {
   let cut = text.slice(0, budget);
   const lineEnd = cut.lastIndexOf("\n");
   cut = lineEnd > budget / 2 ? cut.slice(0, lineEnd) : cut.replace(/<[^>]*$/, "").replace(/&[^;\s]*$/, "");
+  // Never leave half of a surrogate pair (an emoji) at the cut.
+  if (/[\uD800-\uDBFF]$/.test(cut)) cut = cut.slice(0, -1);
   const open: string[] = [];
   for (const [, closing, tag] of cut.matchAll(/<(\/?)([a-z-]+)[^>]*>/gi)) {
-    if (closing) open.splice(open.lastIndexOf(tag!), 1);
-    else open.push(tag!);
+    if (!closing) open.push(tag!);
+    else if (open.lastIndexOf(tag!) >= 0) open.splice(open.lastIndexOf(tag!), 1);
   }
   return cut + CUT_MARK + open.toReversed().map((t) => `</${t}>`).join("");
 }
