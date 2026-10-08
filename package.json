@@ -5,6 +5,7 @@
   "scripts": {
     "record": "bun run src/cli/record.ts",
     "status": "bun run src/cli/status.ts",
+    "summary": "bun run src/cli/summary.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

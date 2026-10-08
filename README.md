@@ -15,6 +15,7 @@ local API. Vocabulary: `GLOSSARY.md`. Decisions: `docs/adr/`.
 bun install
 bun run record   # one recording run: a Snapshot of every Provider, or a gap if OpenUsage is down
 bun run status   # latest reading per Provider and line, plus recent gaps
+bun run summary  # ended Cycles per Provider with their Waste ("low confidence" if readings were sparse)
 bun test
 bunx tsc --noEmit
 ```
