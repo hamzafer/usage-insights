@@ -1,0 +1,14 @@
+{
+  "name": "usage-insights",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "record": "bun run src/cli/record.ts",
+    "status": "bun run src/cli/status.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "1.2.23",
+    "typescript": "5.9.3"
+  }
+}

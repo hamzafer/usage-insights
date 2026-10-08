@@ -1,0 +1,5 @@
+node_modules/
+# Recorded data never lives in the repo (ADR 0002)
+*.db
+*.db-*
+*.log
