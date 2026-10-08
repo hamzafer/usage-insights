@@ -1,5 +1,4 @@
 import type { Report } from "./build.ts";
-import { clip } from "./format.ts";
 import { renderNumbers } from "./render.ts";
 import { isDraftSetup } from "./setup.ts";
 import type { Suggestions, SuggestionsProvider } from "./suggestions.ts";
@@ -12,8 +11,13 @@ import type { Suggestions, SuggestionsProvider } from "./suggestions.ts";
 
 /** A Report has at most this many Suggestions (spec §6). */
 export const MAX_SUGGESTIONS = 3;
-/** A Suggestion is at most this long, in the Markdown and the Telegram card alike. */
-export const MAX_SUGGESTION_CHARS = 120;
+/** The length Claude is asked for: room under MAX_SUGGESTION_CHARS, since it overshoots. */
+export const SUGGESTION_TARGET_CHARS = 100;
+/**
+ * A Suggestion is at most this long, in the Markdown and the Telegram card alike. A longer one is
+ * sent back once to be rewritten, then dropped: never cut, so no Suggestion ends mid-sentence.
+ */
+export const MAX_SUGGESTION_CHARS = 140;
 /** A Suggestion about the Setup being a DRAFT or missing prices (the DRAFT line already says it). */
 const ABOUT_THE_DRAFT = /\bDRAFT\b|\bfill(?:ing)?\s+(?:in|out)\b/i;
 
@@ -53,8 +57,43 @@ export class ClaudeSuggestions implements SuggestionsProvider {
     } catch (e) {
       return { ok: false, reason: reason(e), ...draft };
     }
-    return { ...parseSuggestions(answer), ...draft };
+    const parsed = parseSuggestions(answer);
+    if (!parsed.ok) return { ...parsed, ...draft };
+    return { ok: true, items: await this.withinLimit(parsed.items), ...draft };
   }
+
+  /** Rewrites too-long Suggestions once, in place; drops any still too long or if the rewrite fails. */
+  private async withinLimit(items: string[]): Promise<string[]> {
+    const long = items.filter((item) => !fits(item));
+    if (long.length === 0) return items;
+    let rewritten: string[] = [];
+    try {
+      const answer = await this.options.client.ask({ system: SYSTEM, user: shortenPrompt(long) });
+      const parsed = parseSuggestions(answer);
+      if (parsed.ok) rewritten = parsed.items;
+    } catch {
+      // The rewrite is best effort: without it, the long Suggestions are dropped below.
+    }
+    let next = 0;
+    return items
+      .map((item) => (fits(item) ? item : rewritten[next++]))
+      .filter((item): item is string => item !== undefined && fits(item));
+  }
+}
+
+function fits(item: string): boolean {
+  return [...item].length <= MAX_SUGGESTION_CHARS;
+}
+
+function shortenPrompt(long: string[]): string {
+  return [
+    `Rewrite each of these Suggestions as one sentence of at most ${SUGGESTION_TARGET_CHARS} characters.`,
+    "Keep the Provider, the change and the number that motivates it; drop everything else.",
+    "<suggestions>",
+    ...long.map((item) => `- ${item}`),
+    "</suggestions>",
+    'Answer with JSON only, in the same order: {"suggestions": ["...", "..."]}',
+  ].join("\n");
 }
 
 function userPrompt(setup: string, report: Report, timeZone: string | undefined): string {
@@ -70,7 +109,7 @@ function userPrompt(setup: string, report: Report, timeZone: string | undefined)
     `Write at most ${MAX_SUGGESTIONS} Suggestions for this week. Each one:`,
     "- is a concrete change to the Setup above, naming the Provider, plan or job from the Setup it concerns;",
     "- cites the number from this week's Report that motivates it;",
-    `- is one sentence of at most ${MAX_SUGGESTION_CHARS} characters, plain text, no Markdown.`,
+    `- is one sentence of at most ${SUGGESTION_TARGET_CHARS} characters, plain text, no Markdown.`,
     "Goals the Setup states come first. Fewer Suggestions (or none) is fine when the numbers do not support a change; never invent numbers.",
     "Where a price says unknown, do not guess it.",
     "Never spend a Suggestion on the Setup itself being a DRAFT or on filling in its prices: the Report already says so.",
@@ -84,9 +123,9 @@ function reason(e: unknown): string {
 
 /**
  * Reads Claude's answer: JSON `{"suggestions": [...]}` (or a bare array), also when it is wrapped in
- * prose or a code fence. Keeps at most 3 non-empty strings, each cut to MAX_SUGGESTION_CHARS on a
- * word boundary (so the Markdown and the Telegram card show the same text), and drops any that only
- * say the Setup is a DRAFT or needs prices filled in (the Report's DRAFT line says that). Never throws.
+ * prose or a code fence. Keeps at most 3 non-empty strings, whole (length is handled by the caller,
+ * which never cuts), and drops any that only say the Setup is a DRAFT or needs prices filled in (the
+ * Report's DRAFT line says that). Never throws.
  */
 export function parseSuggestions(answer: string): Suggestions {
   const value = findJson(answer);
@@ -97,8 +136,7 @@ export function parseSuggestions(answer: string): Suggestions {
     .filter((item): item is string => typeof item === "string")
     .map((item) => item.trim())
     .filter((item) => item.length > 0 && !ABOUT_THE_DRAFT.test(item))
-    .slice(0, MAX_SUGGESTIONS)
-    .map((item) => clip(item, MAX_SUGGESTION_CHARS));
+    .slice(0, MAX_SUGGESTIONS);
   return { ok: true, items };
 }
 

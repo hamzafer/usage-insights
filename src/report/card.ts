@@ -26,7 +26,10 @@ export interface CardOptions {
   suggestions?: Suggestions | null;
 }
 
-/** Suggestions longer than this are cut in the card (the Markdown keeps them whole). */
+/**
+ * Data notes longer than this are cut in the card. Suggestions arrive already within
+ * MAX_SUGGESTION_CHARS (the same length), so for them this is only a safety net.
+ */
 export const SUGGESTION_CHARS = 140;
 /** Data notes shown in the card; the rest are counted. */
 const MAX_NOTES = 3;

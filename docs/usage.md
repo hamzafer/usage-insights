@@ -105,7 +105,8 @@ failed: <reason>".
 
 The card has four parts: **▶ Running now** (one line per running Cycle, worst first), **✅ Last
 week** (Cycles that reset, Limit Hits and Overage), **💡 Suggestions** (one sentence each,
-at most 120 characters) and **▸ Details** in an expandable quote (top Projects
+never cut: one too long is
+rewritten once by Claude, else dropped) and **▸ Details** in an expandable quote (top Projects
 and models, token trend, and either "Week N of recording" for the first 4 weeks or the time
 without readings). Providers and models show display names ("Claude (Work)", "Opus 5.5").
 
