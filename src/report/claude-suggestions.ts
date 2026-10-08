@@ -1,7 +1,15 @@
 import type { Report } from "./build.ts";
 import { renderNumbers } from "./render.ts";
 import { isDraftSetup } from "./setup.ts";
-import type { Suggestions, SuggestionsProvider } from "./suggestions.ts";
+import {
+  MAX_SUGGESTION_CHARS,
+  MAX_SUGGESTIONS,
+  SUGGESTION_TARGET_CHARS,
+  type Suggestions,
+  type SuggestionsProvider,
+} from "./suggestions.ts";
+
+export { MAX_SUGGESTION_CHARS, MAX_SUGGESTIONS, SUGGESTION_TARGET_CHARS };
 
 /**
  * Suggestions written by Claude (spec §6, GLOSSARY: Suggestion): the Report's computed numbers plus
@@ -9,15 +17,6 @@ import type { Suggestions, SuggestionsProvider } from "./suggestions.ts";
  * Only the numbers section is sent: no raw log content, no data notes, and Projects by folder name.
  */
 
-/** A Report has at most this many Suggestions (spec §6). */
-export const MAX_SUGGESTIONS = 3;
-/** The length Claude is asked for: room under MAX_SUGGESTION_CHARS, since it overshoots. */
-export const SUGGESTION_TARGET_CHARS = 100;
-/**
- * A Suggestion is at most this long, in the Markdown and the Telegram card alike. A longer one is
- * sent back once to be rewritten, then dropped: never cut, so no Suggestion ends mid-sentence.
- */
-export const MAX_SUGGESTION_CHARS = 140;
 /** A Suggestion about the Setup being a DRAFT or missing prices (the DRAFT line already says it). */
 const ABOUT_THE_DRAFT = /\bDRAFT\b|\bfill(?:ing)?\s+(?:in|out)\b/i;
 
@@ -70,7 +69,9 @@ export class ClaudeSuggestions implements SuggestionsProvider {
     try {
       const answer = await this.options.client.ask({ system: SYSTEM, user: shortenPrompt(long) });
       const parsed = parseSuggestions(answer);
-      if (parsed.ok) rewritten = parsed.items;
+      // Rewrites are matched to the long items by position, so a different count (merged, missing
+      // or filtered ones) would put a rewrite in the wrong place: then none are used.
+      if (parsed.ok && parsed.items.length === long.length) rewritten = parsed.items;
     } catch {
       // The rewrite is best effort: without it, the long Suggestions are dropped below.
     }

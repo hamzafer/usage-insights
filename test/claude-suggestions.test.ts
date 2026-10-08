@@ -7,6 +7,7 @@ import {
   parseSuggestions,
   SUGGESTION_TARGET_CHARS,
 } from "../src/report/claude-suggestions.ts";
+import { SUGGESTION_CHARS } from "../src/report/card.ts";
 import { input } from "./report-fixtures.ts";
 
 const SETUP = "# Setup\n\n- Codex Team: code reviews\n- Cursor Team: rarely used, $20/month allowance\n";
@@ -124,6 +125,35 @@ test("a Suggestion still too long after the rewrite, or a failed rewrite, is dro
 
   const rewriteFails = new FakeClaude(JSON.stringify({ suggestions: [SHORT, LONG] }), new Error("Claude API error (HTTP 529): Overloaded"));
   expect(await new ClaudeSuggestions({ client: rewriteFails, readSetup: () => SETUP }).suggest(report)).toEqual({ ok: true, items: [SHORT] });
+});
+
+const LONG_B =
+  "Route every small side-project task from Claude (personal) to Copilot Student, which has used 0% of its 200 premium requests this month so far, so they all go to waste.";
+const SHORT_B = "Route small side-project tasks to Copilot: 0% of 200 requests used.";
+
+test("two long Suggestions are both rewritten, each keeping its own place", async () => {
+  const claude = new FakeClaude(
+    JSON.stringify({ suggestions: [LONG, SHORT, LONG_B] }),
+    JSON.stringify({ suggestions: [SHORT, SHORT_B] }),
+  );
+  const result = await new ClaudeSuggestions({ client: claude, readSetup: () => SETUP }).suggest(report);
+  expect(result).toEqual({ ok: true, items: [SHORT, SHORT, SHORT_B] });
+});
+
+test("a rewrite with a different number of Suggestions than sent drops the long ones, never misplacing a rewrite", async () => {
+  const fewer = new FakeClaude(JSON.stringify({ suggestions: [LONG, SHORT, LONG_B] }), JSON.stringify({ suggestions: [SHORT_B] }));
+  expect(await new ClaudeSuggestions({ client: fewer, readSetup: () => SETUP }).suggest(report)).toEqual({ ok: true, items: [SHORT] });
+
+  // A rewrite that turns into a DRAFT remark is filtered, which also changes the count.
+  const draftish = new FakeClaude(
+    JSON.stringify({ suggestions: [LONG, SHORT, LONG_B] }),
+    JSON.stringify({ suggestions: ["Fill in the prices in your Setup.", SHORT_B] }),
+  );
+  expect(await new ClaudeSuggestions({ client: draftish, readSetup: () => SETUP }).suggest(report)).toEqual({ ok: true, items: [SHORT] });
+});
+
+test("the card cuts at the same length a Suggestion may have, so a kept Suggestion is never cut", () => {
+  expect(SUGGESTION_CHARS).toBe(MAX_SUGGESTION_CHARS);
 });
 
 test("Suggestions within the limit cost no second call", async () => {

@@ -4,7 +4,7 @@ import { formatTokens } from "../summary.ts";
 import type { Share } from "../token-shares.ts";
 import { type Report, WEEK_MS, type WeekOverage } from "./build.ts";
 import { clip, duration, escapeHtml as e, percent } from "./format.ts";
-import type { Suggestions } from "./suggestions.ts";
+import { MAX_SUGGESTION_CHARS, type Suggestions } from "./suggestions.ts";
 import { fitTelegram, TELEGRAM_TEXT_LIMIT } from "./telegram.ts";
 import { dateParts } from "../dates.ts";
 
@@ -30,7 +30,7 @@ export interface CardOptions {
  * Data notes longer than this are cut in the card. Suggestions arrive already within
  * MAX_SUGGESTION_CHARS (the same length), so for them this is only a safety net.
  */
-export const SUGGESTION_CHARS = 140;
+export const SUGGESTION_CHARS = MAX_SUGGESTION_CHARS;
 /** Data notes shown in the card; the rest are counted. */
 const MAX_NOTES = 3;
 /** While recording is younger than this, the card says "Week N of recording" instead of listing unknown time. */
