@@ -2,6 +2,7 @@
 // per Project and model (`bun run summary`).
 import { mkdirSync } from "node:fs";
 import { loadConfig } from "../config.ts";
+import { claudeCalibration, formatCalibration } from "../calibration.ts";
 import { formatLimitsOverageAndPace, limitsOverageAndPace } from "../limits-summary.ts";
 import { openStore } from "../store.ts";
 import { formatSessions, formatSummary, formatTokenShares } from "../summary.ts";
@@ -24,6 +25,9 @@ try {
   console.log(`\n${formatLimitsOverageAndPace(limitsOverageAndPace(readings, now))}`);
   const tokens = formatTokenShares(tokensByCycle(store.tokenUsage(), windows, now));
   if (tokens) console.log(`\n${tokens}`);
+  const claude = claudeCalibration(readings, store.tokenUsage(), now);
+  const calibration = formatCalibration(claude.calibrations, claude.estimates, claude.cycles);
+  if (calibration) console.log(`\n${calibration}`);
 } finally {
   store.close();
 }

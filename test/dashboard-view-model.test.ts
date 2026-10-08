@@ -158,3 +158,38 @@ describe("data health", () => {
     expect(starts).toEqual(starts.toSorted((a, b) => b - a));
   });
 });
+
+describe("Claude calibration on data health", () => {
+  test("shows each Claude account calibrating, with no Estimated Waste, until live data is enough", () => {
+    const data = {
+      ...syntheticData(),
+      readings: [
+        ...syntheticData().readings,
+        reading("claude", "Weekly", "cycle", 10, "2026-10-12T00:00:00.000Z", "2026-10-05T10:00:00.000Z"),
+        reading("claude", "Weekly", "cycle", 12, "2026-10-12T00:00:00.000Z", "2026-10-05T11:00:00.000Z"),
+      ],
+      tokens: [tokenEvent("claude", "2026-10-05T10:30:00.000Z", "/x/alpha", "claude-opus-5", 5_000)],
+    };
+    const health = buildHealth(data, NOW);
+    expect(health.calibration.map((c) => [c.provider, c.role, c.samples, c.ready])).toEqual([
+      ["claude", "session", 0, false],
+      ["claude", "cycle", 1, false],
+    ]);
+    expect(health.estimatedWaste).toEqual([]);
+  });
+
+  test("lists Estimated Waste once a calibration is ready", () => {
+    const hour = (h: number) => new Date(Date.parse("2026-10-05T00:00:00.000Z") + h * 3_600_000).toISOString();
+    // 12 hourly intervals of 2 points and 20k tokens each: 10k tokens per 1%.
+    const readings = Array.from({ length: 13 }, (_, i) => reading("claude", "Weekly", "cycle", 10 + i * 2, "2026-10-12T00:00:00.000Z", hour(i)));
+    const tokens = [
+      tokenEvent("claude", "2026-09-30T00:00:00.000Z", null, "claude-opus-5", 600_000),
+      ...Array.from({ length: 12 }, (_, i) => tokenEvent("claude", hour(i + 0.5), null, "claude-opus-5", 20_000)),
+    ];
+    const health = buildHealth({ readings, latest: [], gaps: [], tokens }, NOW);
+    expect(health.calibration.find((c) => c.role === "cycle")).toMatchObject({ ready: true, tokensPerPercent: 10_000 });
+    expect(health.estimatedWaste).toEqual([
+      expect.objectContaining({ provider: "claude", to: "2026-10-05T00:00:00.000Z", usedShare: 0.6, share: 0.4, basis: "estimated" }),
+    ]);
+  });
+});

@@ -1,6 +1,7 @@
 import { HATCH_DEFS, idleColumns, seriesSlot, sessionDots, wasteColumns } from "./charts.ts";
 import { escapeHtml as e, formatAmount, formatDuration, formatShare, formatTime, type FormatOptions } from "./format.ts";
 import { formatTokens } from "../summary.ts";
+import { MIN_CALIBRATION_MOVEMENT, MIN_CALIBRATION_SAMPLES } from "../calibration.ts";
 import type { CycleTokens, Share } from "../token-shares.ts";
 import { type DataHealth, type ProjectsPage, type ProviderHistory, type ProviderOverview, type RunningCycle, SNAPSHOT_GAP_MS } from "./view-model.ts";
 
@@ -139,7 +140,7 @@ export function renderHealth(h: DataHealth, ctx: PageContext): string {
       "None.",
       true,
     )}
-  </section>`;
+  </section>${calibrationSection(h, ctx)}`;
   return page("Data health", "/health", ctx, body);
 }
 
@@ -320,6 +321,44 @@ function encodingKey(): string {
     <span><span class="swatch hollow"></span>Waste unknown</span>
     <span><span class="swatch gapkey"></span>No Snapshots</span>
   </footer>`;
+}
+
+/** Claude calibration state and the past Cycles' Estimated Waste it gives (ticket #8). */
+function calibrationSection(h: DataHealth, ctx: PageContext): string {
+  return `
+  <section class="block">
+    <h2>Claude calibration</h2>
+    <p class="hint">Tokens per 1% of a Session or Cycle, learned per account from live Snapshots. Ready after ${MIN_CALIBRATION_SAMPLES} intervals where used% moved and tokens were logged, and ${MIN_CALIBRATION_MOVEMENT} points of movement. Until then past Claude Cycles show tokens only.</p>
+    ${table(
+      ["Account", "Line", "State", "Samples", "Movement", "Tokens per 1%"],
+      h.calibration.map((c) => [
+        providerName(c.provider),
+        c.label,
+        { html: c.ready ? `<span class="status ok"><span aria-hidden="true">✓</span> ready</span>` : `<span class="status warn"><span aria-hidden="true">…</span> calibrating (tokens only)</span>` },
+        `${c.samples} of ${MIN_CALIBRATION_SAMPLES}`,
+        `${Number(c.movement.toFixed(1))} of ${MIN_CALIBRATION_MOVEMENT} points`,
+        c.tokensPerPercent === null ? "n/a" : formatTokens(c.tokensPerPercent),
+      ]),
+      "No Claude Snapshots or tokens yet.",
+      true,
+    )}
+  </section>
+  <section class="block">
+    <h2>Estimated Waste (Claude, from tokens)</h2>
+    <p class="hint">Converted from tokens with the calibration, so always marked ~ and never combined with Measured Waste. Cycles with Measured Waste are not estimated.</p>
+    ${table(
+      ["Account", "Cycle", "Reset", "Tokens", "Waste"],
+      h.estimatedWaste.map((w) => [
+        providerName(w.provider),
+        w.inferred ? `${w.label} (inferred)` : w.label,
+        formatTime(w.to, ctx),
+        formatTokens(w.tokens),
+        formatShare(w),
+      ]),
+      "None yet: calibrating.",
+      true,
+    )}
+  </section>`;
 }
 
 type Cell = string | { html: string };

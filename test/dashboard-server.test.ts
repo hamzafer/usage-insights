@@ -76,6 +76,25 @@ describe("pages", () => {
     expect(res.body).toContain("<td>4d 2h</td>");
   });
 
+  test("data health shows Claude calibration: calibrating, with samples and what it still needs", async () => {
+    seed();
+    const store = openStore(dbPath);
+    store.saveReadings([
+      stored(reading("claude", "Weekly", "cycle", 10, "2026-10-12T00:00:00.000Z", "2026-10-05T10:00:00.000Z")),
+      stored(reading("claude", "Weekly", "cycle", 12, "2026-10-12T00:00:00.000Z", "2026-10-05T11:00:00.000Z")),
+    ]);
+    store.saveTokenEvents([{ key: "c", ...tokenEvent("claude", "2026-10-05T10:30:00.000Z", null, "claude-opus-5", 5_000) }]);
+    store.close();
+
+    const res = await get("/health");
+    expect(res.body).toContain("Claude calibration");
+    expect(res.body).toContain("calibrating");
+    expect(res.body).toContain("1 of 10");
+    expect(res.body).toContain("tokens only");
+    const api = JSON.parse((await get("/api/health")).body);
+    expect(api.calibration.find((c: { role: string }) => c.role === "cycle")).toMatchObject({ provider: "claude", samples: 1, ready: false });
+  });
+
   test("Projects and models shows token share per Cycle by folder name, never full paths", async () => {
     seed();
     const store = openStore(dbPath);
