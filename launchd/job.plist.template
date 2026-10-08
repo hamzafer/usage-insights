@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Rendered by scripts/launchd.sh for one job (recorder or report); do not edit the installed copy.
+     No secrets here: the Telegram token is read from the Telegram plugin's state and the Anthropic
+     key from the Keychain at run time. Settings copied from the installer's environment skip
+     anything named like a key, token, secret or password. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>__LABEL__</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__BUN__</string>
+    <string>run</string>
+    <string>__SCRIPT__</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__REPO__</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>__BUN_DIR__:/usr/bin:/bin</string>
+    <key>USAGE_INSIGHTS_DATA_DIR</key>
+    <string>__DATA_DIR__</string>
+__EXTRA_ENV__
+  </dict>
+__SCHEDULE__
+  <key>StandardOutPath</key>
+  <string>__DATA_DIR__/__LOG__</string>
+  <key>StandardErrorPath</key>
+  <string>__DATA_DIR__/__LOG__</string>
+</dict>
+</plist>

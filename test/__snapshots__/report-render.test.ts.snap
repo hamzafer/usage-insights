@@ -1,0 +1,73 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`numbers section 1`] = `
+"## Numbers
+
+Week: 2026-10-05 09:00 to 2026-10-12 09:00
+
+### Waste of Cycles that reset this week
+
+| Provider | Cycle | Reset | Waste |
+|---|---|---|---|
+| Codex | Weekly | 2026-10-08 09:00 | 20% |
+
+### Pace of running Cycles
+
+| Provider | Cycle | Reset | Pace |
+|---|---|---|---|
+| Codex | Weekly | 2026-10-15 09:00 | heading for Waste 10% |
+
+### Limit Hits and Blocked Time
+
+| Provider | Window | Hit | Blocked this week | Until |
+|---|---|---|---|---|
+| Claude | Session | 2026-10-10 10:00 | 2h | 2026-10-10 12:00 (Reset) |
+
+### Overage
+
+- Claude (Work) Extra usage spent: $15.00
+
+### Top Projects and models (share of tokens, all Providers)
+
+Tokens: 1M
+
+- Projects: alpha 72%, beta 20%, (other) 8%
+- Models: Sonnet 68%, Opus 20%, GPT-5 Codex 12%
+
+### Trend vs the previous 4 weeks
+
+- Waste Codex Weekly: 20% (before: 40% over 2 Cycles)
+- Limit Hits: 1 (before: avg 0 over 3 weeks)
+- Blocked Time: 2h (before: avg 0m over 3 weeks)
+- Tokens: 1M (before: avg 133k over 3 weeks)
+
+### Data coverage
+
+- Claude: 4 readings this week, unknown (no readings) 6d 23h 55m
+- Claude (Work): 2 readings this week, unknown (no readings) 7d
+- Codex: 4 readings this week, unknown (no readings) 7d
+- Recorder gaps this week: 1"
+`;
+
+exports[`Telegram card (HTML) 1`] = `
+"<b>📊 Usage week · 5–12 Oct</b>
+
+<b>▶ Running now</b>
+🟢 Codex  on track
+
+<b>✅ Last week</b>
+Codex reset 1× · 20% wasted (↓ from 40%)
+🚫 Limit hits: 1 (was 0/wk) · blocked 2h   💸 Overage: $15
+⚠️ Codex Backfill failed: disk unreadable
+
+<b>💡 Suggestions</b>
+1. Move code reviews to Codex.
+2. Start Claude (Work) tasks earlier in the week.
+3. Drop Copilot.
+
+<b>▸ Details</b>
+<blockquote expandable>🏆 alpha 72%, beta 20% · Sonnet 68%, Opus 20%
+📈 Tokens 1M (↑ 7.5× usual)
+⏳ Week 4 of recording: numbers sharpen
+📄 Full Report: reports/2026-10-12.md</blockquote>"
+`;

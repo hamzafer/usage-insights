@@ -1,0 +1,20 @@
+{
+  "name": "usage-insights",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "backfill:codex": "bun run src/cli/backfill-codex.ts",
+    "backfill:tokens": "bun run src/cli/backfill-tokens.ts",
+    "record": "bun run src/cli/record.ts",
+    "status": "bun run src/cli/status.ts",
+    "summary": "bun run src/cli/summary.ts",
+    "dashboard": "bun run src/cli/dashboard.ts",
+    "report": "bun run src/cli/report.ts",
+    "setup:draft": "bun run src/cli/setup-draft.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/bun": "1.2.23",
+    "typescript": "5.9.3"
+  }
+}

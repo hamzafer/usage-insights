@@ -1,0 +1,329 @@
+import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { openStore } from "../src/store.ts";
+
+// End to end through the package scripts' entry points, always in a temp data directory.
+const fixture = await Bun.file(new URL("./fixtures/openusage-v1-usage.json", import.meta.url)).text();
+const server = Bun.serve({ port: 0, fetch: () => new Response(fixture) });
+afterAll(() => server.stop(true));
+
+const root = new URL("..", import.meta.url).pathname;
+let dataDir: string;
+
+beforeEach(() => {
+  dataDir = mkdtempSync(join(tmpdir(), "usage-insights-test-"));
+});
+afterEach(() => rmSync(dataDir, { recursive: true, force: true }));
+
+function run(script: string, openUsageUrl: string, extraEnv: Record<string, string> = {}) {
+  const proc = Bun.spawnSync(["bun", "run", script], {
+    cwd: root,
+    env: {
+      ...process.env,
+      USAGE_INSIGHTS_DATA_DIR: dataDir,
+      USAGE_INSIGHTS_OPENUSAGE_URL: openUsageUrl,
+      // The Recorder's automatic Backfills must never read this machine's real logs.
+      USAGE_INSIGHTS_CODEX_DIR: join(dataDir, "no-codex"),
+      USAGE_INSIGHTS_CLAUDE_DIR: join(dataDir, "no-claude"),
+      USAGE_INSIGHTS_CLAUDE_WORK_DIR: join(dataDir, "no-claude-work"),
+      ...extraEnv,
+    },
+  });
+  return { code: proc.exitCode, out: proc.stdout.toString(), err: proc.stderr.toString() };
+}
+
+const liveUrl = () => `http://127.0.0.1:${server.port}/v1/usage`;
+const deadUrl = "http://127.0.0.1:9/v1/usage";
+
+describe("record and status", () => {
+  test("record stores a Snapshot and status shows the latest reading per line", () => {
+    const recorded = run("src/cli/record.ts", liveUrl());
+    expect(recorded.code).toBe(0);
+    expect(recorded.out).toContain("stored 14 lines");
+
+    const status = run("src/cli/status.ts", liveUrl());
+    expect(status.code).toBe(0);
+    expect(status.out).toContain("claude");
+    expect(status.out).toMatch(/Session\s+session\s+25 \/ 100 percent/);
+    expect(status.out).toMatch(/Workspace Credits\s+overage\s+10 \/ 100 credits/);
+    expect(status.out).toContain("No gaps recorded.");
+  });
+
+  test("record with OpenUsage down stores a gap that status lists", () => {
+    const recorded = run("src/cli/record.ts", deadUrl);
+    expect(recorded.code).toBe(0);
+    expect(recorded.out).toContain("gap recorded");
+
+    const status = run("src/cli/status.ts", deadUrl);
+    expect(status.out).toContain("No Snapshots recorded yet.");
+    expect(status.out).toContain("Recent gaps");
+  });
+
+  test("record starts the automatic Backfills at most once per hour and records their outcomes", () => {
+    expect(run("src/cli/record.ts", liveUrl()).code).toBe(0);
+    expect(run("src/cli/record.ts", liveUrl()).code).toBe(0);
+    const store = openStore(join(dataDir, "usage.db"));
+    expect(store.recentRuns(10).map((r) => r.job).toSorted()).toEqual(["backfill:codex", "backfill:tokens"]);
+    store.close();
+  });
+
+  test("record ignores a bad USAGE_INSIGHTS_PORT (only the dashboard uses it)", () => {
+    const recorded = run("src/cli/record.ts", liveUrl(), { USAGE_INSIGHTS_PORT: "web" });
+    expect(recorded.code).toBe(0);
+    expect(recorded.out).toContain("stored 14 lines");
+  });
+
+  test("record logs a store that cannot be opened and exits 0, so launchd keeps scheduling it", () => {
+    // The data directory is a file: neither it nor the database can be created.
+    const notADir = join(dataDir, "file");
+    writeFileSync(notADir, "");
+    const recorded = run("src/cli/record.ts", liveUrl(), { USAGE_INSIGHTS_DATA_DIR: notADir });
+    expect(recorded.code).toBe(0);
+    expect(recorded.out).toContain("Recorder run failed:");
+  });
+});
+
+describe("summary", () => {
+  test("lists ended Cycles with their Waste from stored readings", () => {
+    const store = openStore(join(dataDir, "usage.db"));
+    const weekly = {
+      provider: "codex",
+      label: "Weekly",
+      role: "cycle" as const,
+      limit: 100,
+      unit: "percent",
+      periodMs: 604_800_000,
+      plan: null,
+      recordedAt: "2026-01-05T10:00:05.000Z",
+    };
+    store.saveReadings([
+      { ...weekly, used: 20, resetsAt: "2026-01-08T09:00:00.123Z", fetchedAt: "2026-01-05T10:00:00.000Z" },
+      { ...weekly, used: 75, resetsAt: "2026-01-08T08:59:59.870Z", fetchedAt: "2026-01-08T08:50:00.000Z" },
+      { ...weekly, used: 0, resetsAt: "2099-01-01T09:00:00.000Z", fetchedAt: "2026-01-08T09:05:00.000Z" },
+    ]);
+    store.close();
+
+    const summary = run("src/cli/summary.ts", deadUrl, { TZ: "UTC" });
+    expect(summary.code).toBe(0);
+    expect(summary.out).toStartWith("codex\n  Weekly  reset 2026-01-08 09:00  Waste  25%\n");
+  });
+
+  test("adds Limit Hits, Overage and Pace from stored Session, Cycle and Overage readings", () => {
+    const store = openStore(join(dataDir, "usage.db"));
+    const line = { provider: "claude-work", unit: "percent", periodMs: null, plan: null, recordedAt: "2026-01-05T10:00:05.000Z" };
+    store.saveReadings([
+      { ...line, label: "Session", role: "session", used: 100, limit: 100, resetsAt: "2026-01-05T12:00:00.000Z", fetchedAt: "2026-01-05T10:00:00.000Z" },
+      { ...line, label: "Extra usage spent", role: "overage", unit: "dollars", used: 1, limit: 200, resetsAt: null, fetchedAt: "2026-01-05T10:00:00.000Z" },
+      { ...line, label: "Extra usage spent", role: "overage", unit: "dollars", used: 3.5, limit: 200, resetsAt: null, fetchedAt: "2026-01-05T10:30:00.000Z" },
+    ]);
+    store.close();
+
+    const summary = run("src/cli/summary.ts", deadUrl, { TZ: "UTC" });
+    expect(summary.code).toBe(0);
+    expect(summary.out).toContain("Limit Hits\n  claude-work  Session  hit 2026-01-05 10:00  blocked 30m until Overage\n");
+    expect(summary.out).toContain("Pace\n  no running Cycles\n");
+  });
+
+  test("adds a Sessions section with Session Waste and Idle Capacity", () => {
+    const store = openStore(join(dataDir, "usage.db"));
+    const line = {
+      provider: "codex",
+      limit: 100,
+      unit: "percent",
+      plan: null,
+      recordedAt: "2026-01-05T10:00:05.000Z",
+    };
+    const weekly = { ...line, label: "Weekly", role: "cycle" as const, periodMs: 604_800_000 };
+    const session = { ...line, label: "Session", role: "session" as const, periodMs: 18_000_000 };
+    store.saveReadings([
+      { ...weekly, used: 20, resetsAt: "2026-01-08T09:00:00.000Z", fetchedAt: "2026-01-01T09:00:00.000Z" },
+      { ...weekly, used: 75, resetsAt: "2026-01-08T09:00:00.000Z", fetchedAt: "2026-01-08T08:50:00.000Z" },
+      { ...weekly, used: 0, resetsAt: "2099-01-01T09:00:00.000Z", fetchedAt: "2026-01-08T09:05:00.000Z" },
+      { ...session, used: 60, resetsAt: "2026-01-05T15:00:00.000Z", fetchedAt: "2026-01-05T14:50:00.000Z" },
+      { ...session, used: 0, resetsAt: null, fetchedAt: "2026-01-06T10:00:00.000Z" },
+    ]);
+    // A recorder run that failed between the two readings around the Reset.
+    store.saveGap({ recordedAt: "2026-01-08T08:55:00.000Z", reason: "OpenUsage unreachable" });
+    store.close();
+
+    const summary = run("src/cli/summary.ts", deadUrl, { TZ: "UTC" });
+    expect(summary.code).toBe(0);
+    expect(summary.out).toContain("\n\nSessions\ncodex\n  Session  reset 2026-01-05 15:00  Waste  40%\n");
+    // Only the Session's 5 hours are known; the rest of the Cycle is unknown, not idle.
+    expect(summary.out).toContain("  Idle Capacity  Weekly  reset 2026-01-08 09:00  0m   0%  unknown 6d 19h\n");
+  });
+
+  test("with nothing recorded it says no Cycle has ended", () => {
+    const summary = run("src/cli/summary.ts", deadUrl);
+    expect(summary.code).toBe(0);
+    expect(summary.out).toContain("No ended Cycles yet.");
+  });
+});
+
+describe("backfill:codex", () => {
+  test("rebuilds past Codex Cycles from session logs so summary shows their Waste, and reruns add nothing", () => {
+    // Synthetic log: a Weekly Cycle ending 2026-01-08 09:00 UTC at 70% used, then a new one.
+    const codexDir = join(dataDir, "codex-sessions");
+    const day = join(codexDir, "2026", "01", "08");
+    mkdirSync(day, { recursive: true });
+    const line = (at: string, used: number, resetIso: string) =>
+      JSON.stringify({
+        timestamp: at,
+        type: "event_msg",
+        payload: {
+          type: "token_count",
+          info: null,
+          rate_limits: {
+            limit_id: "codex",
+            primary: { used_percent: 5, window_minutes: 300, resets_at: Date.parse(at) / 1000 + 3600 },
+            secondary: { used_percent: used, window_minutes: 10080, resets_at: Date.parse(resetIso) / 1000 },
+            plan_type: "plus",
+          },
+        },
+      });
+    writeFileSync(
+      join(day, "rollout-2026-01-08T09-00-00-synthetic.jsonl"),
+      [
+        line("2026-01-07T10:00:00.000Z", 40, "2026-01-08T09:00:00Z"),
+        line("2026-01-08T08:50:00.000Z", 70, "2026-01-08T09:00:00Z"),
+        line("2026-01-08T09:10:00.000Z", 1, "2099-01-01T09:00:00Z"),
+      ].join("\n") + "\n",
+    );
+    const env = { USAGE_INSIGHTS_CODEX_DIR: codexDir, TZ: "UTC" };
+
+    const first = run("src/cli/backfill-codex.ts", deadUrl, env);
+    expect(first.code).toBe(0);
+    expect(first.out).toContain("1 log files, 3 new lines, 6 readings stored");
+    expect(run("src/cli/backfill-codex.ts", deadUrl, env).out).toContain("1 log files, 0 new lines, 0 readings stored");
+
+    const summary = run("src/cli/summary.ts", deadUrl, env);
+    expect(summary.out).toStartWith("codex\n  Weekly  reset 2026-01-08 09:00  Waste  30%\n");
+  });
+
+  test("with no Codex logs it stores nothing and says so", () => {
+    const out = run("src/cli/backfill-codex.ts", deadUrl, { USAGE_INSIGHTS_CODEX_DIR: join(dataDir, "missing") });
+    expect(out.code).toBe(0);
+    expect(out.out).toContain("0 log files");
+  });
+});
+
+describe("backfill:tokens", () => {
+  test("reads Claude and Codex logs so summary shows token share per Project and model, and reruns add nothing", () => {
+    // Synthetic logs: one Claude response written as two lines in a repository, one Codex call outside any.
+    const repo = join(dataDir, "code", "alpha");
+    mkdirSync(join(repo, ".git"), { recursive: true });
+    const claudeDir = join(dataDir, "claude-projects");
+    mkdirSync(join(claudeDir, "-code-alpha"), { recursive: true });
+    const line = JSON.stringify({
+      type: "assistant",
+      timestamp: "2026-10-06T10:00:00.000Z",
+      requestId: "req_FAKE",
+      message: { id: "msg_FAKE", model: "claude-opus-5", usage: { input_tokens: 100, output_tokens: 200, cache_creation_input_tokens: 0, cache_read_input_tokens: 700 } },
+      cwd: join(repo, "src"),
+    });
+    writeFileSync(join(claudeDir, "-code-alpha", "s1.jsonl"), `${line}\n${line}\n`);
+    const codexDir = join(dataDir, "codex-sessions");
+    mkdirSync(join(codexDir, "2026", "10", "06"), { recursive: true });
+    writeFileSync(
+      join(codexDir, "2026", "10", "06", "rollout-2026-10-06T12-00-00-synthetic.jsonl"),
+      [
+        { timestamp: "2026-10-06T10:00:00.000Z", type: "session_meta", payload: { cwd: join(dataDir, "scratch") } },
+        { timestamp: "2026-10-06T10:00:01.000Z", type: "turn_context", payload: { cwd: join(dataDir, "scratch"), model: "gpt-5.5" } },
+        {
+          timestamp: "2026-10-06T10:00:02.000Z",
+          type: "event_msg",
+          payload: { type: "token_count", info: { total_token_usage: { total_tokens: 500 }, last_token_usage: { input_tokens: 400, cached_input_tokens: 0, output_tokens: 100 } } },
+        },
+      ].map((l) => `${JSON.stringify(l)}\n`).join(""),
+    );
+    const env = {
+      USAGE_INSIGHTS_CLAUDE_DIR: claudeDir,
+      USAGE_INSIGHTS_CLAUDE_WORK_DIR: join(dataDir, "missing"),
+      USAGE_INSIGHTS_CODEX_DIR: codexDir,
+      TZ: "UTC",
+    };
+
+    const first = run("src/cli/backfill-tokens.ts", deadUrl, env);
+    expect(first.code).toBe(0);
+    expect(first.out).toContain("2 log files, 5 new lines, 2 API calls stored");
+    expect(run("src/cli/backfill-tokens.ts", deadUrl, env).out).toContain("2 log files, 0 new lines, 0 API calls stored");
+
+    const summary = run("src/cli/summary.ts", deadUrl, env);
+    expect(summary.out).toContain("Projects and models (token share per Cycle)\nclaude\n");
+    expect(summary.out).toContain("1k tokens");
+    expect(summary.out).toContain("    Projects  alpha 100%\n    Models    claude-opus-5 100%\n");
+    expect(summary.out).toContain("codex\n");
+    expect(summary.out).toContain("    Projects  (other) 100%\n    Models    gpt-5.5 100%");
+    expect(summary.out).not.toContain(dataDir);
+  });
+});
+
+describe("launchd", () => {
+  /** The installer's environment without the settings these tests set themselves. */
+  function baseEnv(): Record<string, string | undefined> {
+    return Object.fromEntries(
+      Object.entries(process.env).filter(([k]) => !k.startsWith("USAGE_INSIGHTS_") && !k.startsWith("TELEGRAM_") && !k.startsWith("ANTHROPIC_")),
+    );
+  }
+
+  function renderWith(env: Record<string, string>, ...args: string[]) {
+    const proc = Bun.spawnSync(args, { cwd: root, env: { ...baseEnv(), USAGE_INSIGHTS_DATA_DIR: dataDir, ...env } });
+    return { code: proc.exitCode, out: proc.stdout.toString() };
+  }
+
+  const render = (...args: string[]) => renderWith({}, ...args);
+
+  test("the installer's Usage Insights settings and Telegram state dir go into the plist, never keys or tokens", () => {
+    const out = renderWith(
+      {
+        USAGE_INSIGHTS_PORT: "6800",
+        USAGE_INSIGHTS_CLAUDE_MODEL: "model<a&b>",
+        TELEGRAM_STATE_DIR: "/tmp/fake-telegram",
+        ANTHROPIC_API_KEY: "sk-fake-secret",
+        TELEGRAM_BOT_TOKEN: "123:fake-token",
+        USAGE_INSIGHTS_API_KEY: "fake-key",
+        USAGE_INSIGHTS_BOT_TOKEN: "fake-token-2",
+        USAGE_INSIGHTS_SECRET: "fake-secret",
+      },
+      "scripts/launchd.sh", "install", "--print", "report", root,
+    ).out;
+    expect(out).toContain("<key>USAGE_INSIGHTS_PORT</key>\n    <string>6800</string>");
+    expect(out).toContain("<key>USAGE_INSIGHTS_CLAUDE_MODEL</key>\n    <string>model&lt;a&amp;b&gt;</string>");
+    expect(out).toContain("<key>TELEGRAM_STATE_DIR</key>\n    <string>/tmp/fake-telegram</string>");
+    expect(out.match(/<key>USAGE_INSIGHTS_DATA_DIR<\/key>/g)).toHaveLength(1);
+    for (const secret of ["sk-fake-secret", "fake-token", "fake-key", "fake-secret", "ANTHROPIC_API_KEY", "TOKEN", "SECRET", "_KEY"]) {
+      expect(out).not.toContain(secret);
+    }
+  });
+
+  test("one template renders both jobs: label, command, schedule and log per job", () => {
+    const recorder = render("scripts/launchd.sh", "install", "--print", "recorder", root);
+    expect(recorder.code).toBe(0);
+    expect(recorder.out).toContain("<string>dev.usage-insights.recorder</string>");
+    expect(recorder.out).toContain("<string>record</string>");
+    expect(recorder.out).toContain("<key>StartInterval</key>\n  <integer>300</integer>");
+    expect(recorder.out).toContain(`<string>${dataDir}/recorder.log</string>`);
+    expect(recorder.out).not.toContain("__");
+
+    const report = render("scripts/launchd.sh", "install", "--print", "report", root);
+    expect(report.out).toContain("<string>dev.usage-insights.report</string>");
+    expect(report.out).toContain("<key>StartCalendarInterval</key>");
+    expect(report.out).toContain(`<string>${dataDir}/report.log</string>`);
+    expect(report.out).not.toContain("__");
+  });
+
+  test("the per-job scripts are thin wrappers with the same output", () => {
+    expect(render("scripts/install-launchd.sh", "--print", root).out).toBe(
+      render("scripts/launchd.sh", "install", "--print", "recorder", root).out,
+    );
+    expect(render("scripts/install-report-launchd.sh", "--print", root).out).toBe(
+      render("scripts/launchd.sh", "install", "--print", "report", root).out,
+    );
+  });
+
+  test("an unknown job is refused", () => {
+    expect(render("scripts/launchd.sh", "install", "--print", "nightly", root).code).toBe(64);
+  });
+});
