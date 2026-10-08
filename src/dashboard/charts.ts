@@ -45,16 +45,20 @@ export function wasteColumns(results: readonly CycleResult[], o: ColumnOptions):
   );
 }
 
-/** Idle Capacity per Cycle as columns; the running Cycle is drawn faint and labelled "so far". */
+/**
+ * Idle Capacity per Cycle as columns; the running Cycle is drawn faint and labelled "so far".
+ * Time without readings stacks on top, hatched: unknown, never counted as idle.
+ */
 export function idleColumns(idle: readonly IdleEntry[], o: ColumnOptions): string {
   return columns(
     idle.map((i) => ({
       share: i.share,
+      unknown: i.unknownShare,
       label: i.label,
       estimated: false,
       faint: i.running,
       axisLabel: i.running ? "so far" : formatTime(i.to, o, "date"),
-      tip: `${i.label} ${i.running ? "running, so far" : `reset ${formatTime(i.to, o)}`}: Idle Capacity ${Math.round(i.share * 100)}%`,
+      tip: `${i.label} ${i.running ? "running, so far" : `reset ${formatTime(i.to, o)}`}: Idle Capacity ${Math.round(i.share * 100)}%, unknown (no readings) ${Math.round(i.unknownShare * 100)}%`,
     })),
     o,
   );
@@ -62,6 +66,8 @@ export function idleColumns(idle: readonly IdleEntry[], o: ColumnOptions): strin
 
 interface Column {
   share: number | null;
+  /** Unknown share stacked on top (no readings). */
+  unknown?: number;
   label: string;
   estimated: boolean;
   faint: boolean;
@@ -86,8 +92,11 @@ function columns(cols: readonly Column[], o: ColumnOptions): string {
     const h = Math.max(c.share * plotH, 2);
     const cls = ["col", `s${slot}`, c.estimated ? "est" : "", c.faint ? "faint" : ""].filter(Boolean).join(" ");
     const w = `min(${MAX_COLUMN_PX}px, ${pct(band * 0.6)})`;
+    const uh = (c.unknown ?? 0) * plotH;
+    const unknown =
+      uh >= 3 ? `<rect class="gap" x="-12" y="${y(c.share) - uh}" width="24" height="${uh - 2}" rx="${Math.min(4, (uh - 2) / 2)}"/>` : "";
     // A centered column: a <svg> placed at the band center, the bar drawn around x=0 with overflow visible.
-    return `<g class="mark">${hit}<svg x="${pct(cx)}" y="0" overflow="visible" class="colwrap" style="--w:${w}"><rect class="${cls}" x="-12" y="${y(c.share)}" width="24" height="${h}" rx="${Math.min(4, h / 2)}"/><rect class="${cls} foot" x="-12" y="${base - Math.min(4, h / 2)}" width="24" height="${Math.min(4, h / 2)}"/></svg></g>`;
+    return `<g class="mark">${hit}<svg x="${pct(cx)}" y="0" overflow="visible" class="colwrap" style="--w:${w}"><rect class="${cls}" x="-12" y="${y(c.share)}" width="24" height="${h}" rx="${Math.min(4, h / 2)}"/><rect class="${cls} foot" x="-12" y="${base - Math.min(4, h / 2)}" width="24" height="${Math.min(4, h / 2)}"/>${unknown}</svg></g>`;
   });
 
   const last = cols.at(-1);

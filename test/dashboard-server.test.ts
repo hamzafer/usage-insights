@@ -71,6 +71,9 @@ describe("pages", () => {
     expect(res.body).toContain("Idle Capacity per Cycle");
     expect(res.body).toContain('class="gap"');
     expect(res.body).toContain("No Snapshots 25 Sep 00:00 to 30 Sep 23:50");
+    // Time without readings is shown as unknown next to Idle Capacity, never as idle.
+    expect(res.body).toContain("unknown (no readings) 91%");
+    expect(res.body).toContain("<td>4d 2h</td>");
   });
 
   test("an unknown Provider is a 404 page", async () => {

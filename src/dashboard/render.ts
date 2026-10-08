@@ -1,6 +1,6 @@
 import { HATCH_DEFS, idleColumns, seriesSlot, sessionDots, wasteColumns } from "./charts.ts";
 import { escapeHtml as e, formatAmount, formatDuration, formatShare, formatTime, type FormatOptions } from "./format.ts";
-import type { DataHealth, ProviderHistory, ProviderOverview, RunningCycle } from "./view-model.ts";
+import { type DataHealth, type ProviderHistory, type ProviderOverview, type RunningCycle, SNAPSHOT_GAP_MS } from "./view-model.ts";
 
 /**
  * HTML pages from view models. Pure string building: no data access here (ADR 0002 keeps the
@@ -69,15 +69,16 @@ export function renderHistory(h: ProviderHistory, ctx: PageContext): string {
   </section>
   <section class="block">
     <h2>Idle Capacity per Cycle</h2>
-    <p class="hint">Share of each Cycle with no Session open, when its allowance could not be used at all.</p>
+    <p class="hint">Share of each Cycle with no Session open, when its allowance could not be used at all. Time without readings is unknown and stacks on top, hatched; it never counts as idle.</p>
     ${idleChart}
     ${table(
-      ["Cycle", "Span", "Idle", "Share"],
+      ["Cycle", "Span", "Idle", "Share", "Unknown"],
       h.idle.map((i) => [
         i.label,
         `${formatTime(i.from, ctx)} to ${i.running ? "now" : formatTime(i.to, ctx)}`,
         formatDuration(i.idleMs),
         `${Math.round(i.share * 100)}%${i.running ? " so far" : ""}`,
+        i.unknownMs > 0 ? formatDuration(i.unknownMs) : "none",
       ]),
     )}
   </section>
@@ -121,7 +122,7 @@ export function renderHealth(h: DataHealth, ctx: PageContext): string {
   </section>
   <section class="block">
     <h2>Stretches without Snapshots</h2>
-    <p class="hint">More than an hour between a Provider's Snapshots, newest first.</p>
+    <p class="hint">More than ${SNAPSHOT_GAP_MS / 60_000} minutes between a Provider's Snapshots, newest first. This time counts as unknown, never as zero usage or Idle Capacity.</p>
     ${table(
       ["Provider", "From", "To", "Length"],
       h.snapshotGaps.map((g) => [

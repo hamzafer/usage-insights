@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildHealth, buildHistory, buildOverview } from "../src/dashboard/view-model.ts";
+import { buildHealth, buildHistory, buildOverview, SNAPSHOT_GAP_MS } from "../src/dashboard/view-model.ts";
 import { NOW, reading, syntheticData } from "./dashboard-fixtures.ts";
 
 describe("overview", () => {
@@ -80,15 +80,18 @@ describe("history", () => {
       ["Weekly", false],
       ["Weekly", true],
     ]);
-    // The running Cycle (from 10-01 00:00 to now) had two 5-hour Sessions open.
+    // The running Cycle (10-01 00:00 to now, 108h) had two 5-hour Sessions open. Its readings are
+    // hours apart, so the rest is unknown, not idle.
     const running = codex.idle[1]!;
-    expect(running.idleMs).toBe((4.5 * 24 - 10) * 3_600_000);
+    expect(running.idleMs).toBe(0);
+    expect(running.unknownMs).toBe(98 * 3_600_000);
+    expect(running.unknownShare).toBeCloseTo(98 / 108);
   });
 
   test("marks stretches without recorded Snapshots as gaps, up to now", () => {
     const codex = buildHistory(syntheticData(), "codex", NOW)!;
     expect(codex.gaps[0]).toEqual({ from: "2026-09-25T00:00:00.000Z", to: "2026-09-30T23:50:00.000Z" });
-    expect(codex.gaps.every((g) => Date.parse(g.to) - Date.parse(g.from) > 60 * 60_000)).toBe(true);
+    expect(codex.gaps.every((g) => Date.parse(g.to) - Date.parse(g.from) > SNAPSHOT_GAP_MS)).toBe(true);
   });
 
   test("Backfill readings are not counted as recorder coverage or gaps", () => {
@@ -112,7 +115,8 @@ describe("data health", () => {
     expect(health.unclassified).toEqual([
       { provider: "cursor", label: "Mystery meter", lastSeenAt: "2026-10-05T11:55:00.000Z" },
     ]);
-    expect(health.recorderGaps).toEqual([{ recordedAt: "2026-10-04T08:00:00.000Z", reason: "OpenUsage unreachable" }]);
+    // Newest first.
+    expect(health.recorderGaps.map((g) => g.reason)).toEqual(["OpenUsage unreachable", "OpenUsage timed out"]);
   });
 
   test("lists stretches without Snapshots, newest first", () => {

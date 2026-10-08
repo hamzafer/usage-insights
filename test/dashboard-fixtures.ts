@@ -58,6 +58,7 @@ export function stored(r: Reading, plan: string | null = null): StoredReading {
 }
 
 export const SYNTHETIC_GAPS: Gap[] = [
+  { recordedAt: "2026-10-03T08:00:00.000Z", reason: "OpenUsage timed out" },
   { recordedAt: "2026-10-04T08:00:00.000Z", reason: "OpenUsage unreachable" },
 ];
 

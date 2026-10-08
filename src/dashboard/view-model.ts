@@ -1,7 +1,7 @@
 import { limitsOverageAndPace } from "../limits-summary.ts";
 import type { CycleOverage } from "../overage.ts";
 import type { Pace } from "../pace.ts";
-import { idleCapacity } from "../sessions.ts";
+import { idleCapacity, READING_GAP_TOLERANCE_MS } from "../sessions.ts";
 import type { Gap, StoredReading } from "../store.ts";
 import { deriveWindows, type Reading, type Waste, type Window } from "../window-model.ts";
 
@@ -16,7 +16,7 @@ export interface DashboardData {
   readings: Reading[];
   /** The newest reading of every line. */
   latest: StoredReading[];
-  /** Recent recorder gaps, newest first. */
+  /** Every recorder gap, oldest first. */
   gaps: Gap[];
 }
 
@@ -64,7 +64,11 @@ export interface Span {
 export interface IdleEntry extends Span {
   label: string;
   idleMs: number;
+  /** Time without readings: unknown, never counted as idle (ADR 0001). */
+  unknownMs: number;
+  /** `idleMs` and `unknownMs` as shares of the span, 0..1. */
   share: number;
+  unknownShare: number;
   running: boolean;
 }
 
@@ -98,8 +102,13 @@ export interface DataHealth {
 
 export const RECENT_CYCLES = 8;
 export const LIMIT_HIT_LOOKBACK_MS = 28 * 24 * 3_600_000;
-/** No Snapshot for longer than this is a gap (the Recorder runs every 5 minutes). */
-export const SNAPSHOT_GAP_MS = 60 * 60_000;
+/**
+ * No Snapshot for longer than this is a gap: the same tolerance Idle Capacity uses, so hatched
+ * gaps and unknown time agree (the Recorder runs every 5 minutes).
+ */
+export const SNAPSHOT_GAP_MS = READING_GAP_TOLERANCE_MS;
+/** How many recorder gaps the data-health page lists. */
+export const RECENT_GAPS = 200;
 /** A Provider whose newest Snapshot is older than this is stale. */
 export const STALE_AFTER_MS = 30 * 60_000;
 
@@ -152,12 +161,14 @@ export function buildHistory(data: DashboardData, provider: string, now: string 
   const windows = analysedWindows(readings, now);
   if (windows.length === 0) return null;
 
-  const idle = idleCapacity(windows, now).map((i) => ({
+  const idle = idleCapacity(windows, now, { gaps: data.gaps }).map((i) => ({
     label: i.cycle.label,
     from: i.from,
     to: i.to,
     idleMs: i.idleMs,
+    unknownMs: i.unknownMs,
     share: i.share,
+    unknownShare: spanShare(i.unknownMs, i.from, i.to),
     running: i.cycle.endedAt === null,
   }));
   const first = Math.min(...readings.map((r) => toMs(r.fetchedAt)));
@@ -188,7 +199,7 @@ export function buildHealth(data: DashboardData, now: string | Date): DataHealth
     unclassified: data.latest
       .filter((r) => r.role === "unclassified")
       .map((r) => ({ provider: r.provider, label: r.label, lastSeenAt: r.fetchedAt })),
-    recorderGaps: data.gaps,
+    recorderGaps: data.gaps.toReversed().slice(0, RECENT_GAPS),
     snapshotGaps: providers
       .flatMap((provider) => snapshotGaps(byProvider.get(provider)!, now).map((g) => ({ provider, ...g })))
       .toSorted((a, b) => toMs(b.from) - toMs(a.from)),
@@ -223,6 +234,11 @@ function snapshotGaps(readings: readonly Reading[], now: string | Date): Span[] 
     if (times[i]! - times[i - 1]! > SNAPSHOT_GAP_MS) gaps.push({ from: iso(times[i - 1]!), to: iso(times[i]!) });
   }
   return gaps;
+}
+
+function spanShare(durationMs: number, from: string, to: string): number {
+  const length = toMs(to) - toMs(from);
+  return length > 0 ? durationMs / length : 0;
 }
 
 function byEnd(a: CycleResult, b: CycleResult): number {
