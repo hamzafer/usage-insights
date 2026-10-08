@@ -2,6 +2,7 @@ import { claudeCalibration } from "../calibration.ts";
 import { findLimitHits, type LimitHit } from "../limits.ts";
 import { overageUnit } from "../overage.ts";
 import { type Pace, paceOfRunningCycles } from "../pace.ts";
+import { LIVE_SOURCE } from "../providers.ts";
 import { type GapMarker, READING_GAP_TOLERANCE_MS } from "../sessions.ts";
 import type { TokenEvent } from "../store.ts";
 import { type TokenShares, topUsage } from "../token-shares.ts";
@@ -268,7 +269,7 @@ function coverage(readings: readonly Reading[], gaps: readonly GapMarker[], from
 
 /** Backfills reach back further than the Recorder: the first live Snapshot is when recording began. */
 function recordingSince(readings: readonly Reading[]): string | null {
-  const live = readings.filter((r) => r.source === "openusage");
+  const live = readings.filter((r) => r.source === LIVE_SOURCE);
   const times = (live.length ? live : readings).map((r) => ms(r.fetchedAt));
   return times.length ? iso(Math.min(...times)) : null;
 }

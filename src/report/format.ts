@@ -42,8 +42,17 @@ export function escapeHtml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/** Cuts text to at most `max` characters, ending with "…" when cut. */
+/**
+ * Cuts text to at most `max` characters, ending with "…" when cut. The cut falls on a word boundary
+ * (only a single word longer than half of `max` is cut inside), and trailing , ; : are dropped.
+ */
 export function clip(text: string, max: number): string {
   const chars = [...text];
-  return chars.length <= max ? text : `${chars.slice(0, max - 1).join("").trimEnd()}…`;
+  if (chars.length <= max) return text;
+  let cut = chars.slice(0, max - 1).join("");
+  if (!/\s/.test(chars[max - 1]!)) {
+    const lastSpace = cut.search(/\s\S*$/);
+    if (lastSpace >= cut.length / 2) cut = cut.slice(0, lastSpace);
+  }
+  return `${cut.trimEnd().replace(/[,;:]+$/, "")}…`;
 }

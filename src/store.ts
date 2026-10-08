@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
 import type { LineRole } from "./classify.ts";
+import { LIVE_SOURCE } from "./providers.ts";
 import type { Reading } from "./window-model.ts";
 
 /** One stored progress line of one Snapshot. */
@@ -15,7 +16,7 @@ export interface StoredReading {
   plan: string | null;
   fetchedAt: string;
   recordedAt: string;
-  /** Where the reading came from: `openusage` (a Snapshot, the default) or `backfill:<provider>`. */
+  /** Where the reading came from: LIVE_SOURCE (a Snapshot, the default) or `backfill:<provider>`. */
   source?: string;
 }
 
@@ -48,6 +49,16 @@ export interface KeyedTokenEvent extends TokenEvent {
 export interface Gap {
   recordedAt: string;
   reason: string;
+}
+
+/** The outcome of one Backfill or Report run (spec: Error handling: failures are visible). */
+export interface RunOutcome {
+  /** `backfill:codex`, `backfill:tokens` or `report`. */
+  job: string;
+  at: string;
+  ok: boolean;
+  /** Why it failed; null when it went fine. */
+  reason: string | null;
 }
 
 /**
@@ -98,6 +109,16 @@ const MIGRATIONS: string[] = [
      output      INTEGER NOT NULL
    );
    CREATE INDEX token_events_by_time ON token_events (at);`,
+  // Outcomes of Backfill and Report runs (spec: Error handling), shown on the data-health page and
+  // used to run the automatic Backfills at most once per hour.
+  `CREATE TABLE runs (
+     id          INTEGER PRIMARY KEY,
+     job         TEXT NOT NULL,
+     at          TEXT NOT NULL,
+     ok          INTEGER NOT NULL,
+     reason      TEXT
+   );
+   CREATE INDEX runs_by_job ON runs (job, at);`,
 ];
 
 export interface Store {
@@ -125,13 +146,26 @@ export interface Store {
   saveTokenEvents(events: KeyedTokenEvent[]): number;
   /** Token events, oldest first; only those at or after `from` and before `to` when given. */
   tokenUsage(range?: { from?: string; to?: string }): TokenEvent[];
+  saveRun(outcome: RunOutcome): void;
+  /** The newest run outcomes first. */
+  recentRuns(limit: number): RunOutcome[];
+  /** When the job last ran (ok or not), or null. */
+  lastRunAt(job: string): string | null;
   close(): void;
 }
 
-export function openStore(path: string): Store {
-  const db = new Database(path, { create: true, strict: true });
-  db.exec("PRAGMA journal_mode = WAL;");
-  migrate(db);
+/**
+ * Opens (creating and migrating) the store at `path`. `readonly`: for dry runs, which write nothing;
+ * the file must exist, and it is neither migrated nor switched to WAL (writes then throw).
+ */
+export function openStore(path: string, options: { readonly?: boolean } = {}): Store {
+  const db = options.readonly
+    ? new Database(path, { readonly: true, strict: true })
+    : new Database(path, { create: true, strict: true });
+  if (!options.readonly) {
+    db.exec("PRAGMA journal_mode = WAL;");
+    migrate(db);
+  }
 
   const insert = db.prepare(
     `INSERT OR IGNORE INTO readings
@@ -140,7 +174,7 @@ export function openStore(path: string): Store {
   );
   const insertMany = db.transaction((rows: StoredReading[]) => {
     let added = 0;
-    for (const row of rows) added += insert.run({ ...row, source: row.source ?? "openusage" }).changes;
+    for (const row of rows) added += insert.run({ ...row, source: row.source ?? LIVE_SOURCE }).changes;
     return added;
   });
 
@@ -209,11 +243,11 @@ export function openStore(path: string): Store {
       db.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM readings").get()?.n ?? 0,
     livePlan: (provider) =>
       db
-        .query<{ plan: string | null }, [string]>(
-          `SELECT plan FROM readings WHERE provider = ? AND source = 'openusage'
+        .query<{ plan: string | null }, [string, string]>(
+          `SELECT plan FROM readings WHERE provider = ? AND source = ?
             ORDER BY fetched_at DESC, id DESC LIMIT 1`,
         )
-        .get(provider)?.plan ?? null,
+        .get(provider, LIVE_SOURCE)?.plan ?? null,
     backfillOffset: (source, path) =>
       db
         .query<{ offset: number }, [string, string]>(
@@ -226,6 +260,23 @@ export function openStore(path: string): Store {
            ON CONFLICT (source, path) DO UPDATE SET offset = excluded.offset`,
       ).run(source, path, offset);
     },
+    saveRun: (outcome) => {
+      db.query("INSERT INTO runs (job, at, ok, reason) VALUES (?, ?, ?, ?)").run(
+        outcome.job,
+        outcome.at,
+        outcome.ok ? 1 : 0,
+        outcome.reason,
+      );
+    },
+    recentRuns: (limit) =>
+      db
+        .query<{ job: string; at: string; ok: number; reason: string | null }, [number]>(
+          "SELECT job, at, ok, reason FROM runs ORDER BY at DESC, id DESC LIMIT ?",
+        )
+        .all(limit)
+        .map((r) => ({ ...r, ok: r.ok === 1 })),
+    lastRunAt: (job) =>
+      db.query<{ at: string | null }, [string]>("SELECT MAX(at) AS at FROM runs WHERE job = ?").get(job)?.at ?? null,
     close: () => db.close(),
   };
 }

@@ -116,6 +116,16 @@ export function renderHealth(h: DataHealth, ctx: PageContext): string {
     )}
   </section>
   <section class="block">
+    <h2>Failed runs</h2>
+    <p class="hint">Backfill and Report runs that failed, newest first. The Recorder starts the Backfills once per hour.</p>
+    ${table(
+      ["When", "Run", "Reason"],
+      h.failedRuns.map((r) => [formatTime(r.at, ctx), jobName(r.job), r.reason ?? ""]),
+      "No failed runs.",
+      true,
+    )}
+  </section>
+  <section class="block">
     <h2>Stretches without Snapshots</h2>
     <p class="hint">More than ${SNAPSHOT_GAP_MS / 60_000} minutes between a Provider's Snapshots, newest first. This time counts as unknown, never as zero usage or Idle Capacity.</p>
     ${table(
@@ -283,12 +293,23 @@ function meter(r: RunningCycle, ctx: PageContext): string {
     </div>`;
 }
 
+/** `backfill:codex` → "Codex Backfill", `backfill:tokens` → "Token Backfill", `report` → "Report". */
+function jobName(job: string): string {
+  if (job === "report") return "Report";
+  const backfill = /^backfill:(.+)$/.exec(job);
+  if (!backfill) return job;
+  const name = backfill[1] === "tokens" ? "Token" : providerName(backfill[1]!);
+  return `${name} Backfill`;
+}
+
 function healthBanner(h: DataHealth, ctx: PageContext): string {
   const dayAgo = Date.parse(ctx.now) - 24 * 3_600_000;
   const recent = h.recorderGaps.filter((g) => Date.parse(g.recordedAt) >= dayAgo).length;
   const stale = h.providers.filter((p) => p.stale && p.lastSnapshotAt).length;
+  const failed = h.failedRuns.filter((r) => Date.parse(r.at) >= dayAgo).length;
   const issues = [
     recent && `${recent} recorder gap${recent === 1 ? "" : "s"} in the last 24 hours`,
+    failed && `${failed} failed Backfill or Report run${failed === 1 ? "" : "s"} in the last 24 hours`,
     stale && `${stale} Provider${stale === 1 ? "" : "s"} without a fresh Snapshot`,
     h.unclassified.length && `${h.unclassified.length} unclassified line${h.unclassified.length === 1 ? "" : "s"}`,
   ].filter(Boolean);

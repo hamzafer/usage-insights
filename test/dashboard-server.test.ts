@@ -143,6 +143,24 @@ describe("pages", () => {
     expect(res.body).toContain("5 Oct 11:55");
   });
 
+  test("data health lists failed Backfill and Report runs with their reason; the overview flags recent ones", async () => {
+    seed();
+    const store = openStore(dbPath);
+    store.saveRun({ job: "backfill:codex", at: "2026-10-05T09:00:00.000Z", ok: false, reason: "sessions dir unreadable" });
+    store.saveRun({ job: "backfill:tokens", at: "2026-10-05T09:00:00.000Z", ok: true, reason: null });
+    store.saveRun({ job: "report", at: "2026-10-05T10:00:00.000Z", ok: false, reason: "Telegram send failed (HTTP 401)" });
+    store.close();
+
+    const res = await get("/health");
+    expect(res.body).toContain("Failed runs");
+    expect(res.body).toContain("Codex Backfill");
+    expect(res.body).toContain("sessions dir unreadable");
+    expect(res.body).toContain("Telegram send failed (HTTP 401)");
+    const api = JSON.parse((await get("/api/health")).body);
+    expect(api.failedRuns.map((r: { job: string }) => r.job)).toEqual(["report", "backfill:codex"]);
+    expect((await get("/")).body).toContain("2 failed Backfill or Report runs in the last 24 hours");
+  });
+
   test("Estimated Waste is marked ~", async () => {
     // Claude Backfill readings, straight from the fixture (the store write path for them is #5's).
     const readings = syntheticReadings().filter((r) => r.provider === "claude");

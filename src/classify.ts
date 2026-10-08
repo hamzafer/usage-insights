@@ -1,3 +1,5 @@
+import { providerInfo } from "./providers.ts";
+
 /**
  * The domain role of one progress line (spec: "Line classification").
  * - session / cycle / overage: analysed by the Window Model.
@@ -13,24 +15,7 @@ export type LineRole =
   | "ignored"
   | "unclassified";
 
-/** Mapping table, keyed by OpenUsage providerId, then line label. */
-const LINE_ROLES: Record<string, Record<string, LineRole>> = {
-  claude: { Session: "session", Weekly: "cycle" },
-  "claude-work": {
-    Session: "session",
-    Weekly: "cycle",
-    "Extra usage spent": "overage",
-  },
-  codex: { Session: "session", Weekly: "cycle", "Workspace Credits": "overage" },
-  cursor: {
-    "Total usage": "cycle",
-    "On-demand": "overage",
-    "Auto usage": "submeter",
-    "API usage": "submeter",
-  },
-  copilot: { Premium: "cycle", Chat: "ignored" },
-};
-
+/** The line's role from the Provider registry (src/providers.ts), keyed by providerId then label. */
 export function classifyLine(providerId: string, label: string): LineRole {
-  return LINE_ROLES[providerId]?.[label] ?? "unclassified";
+  return providerInfo(providerId)?.lines[label] ?? "unclassified";
 }

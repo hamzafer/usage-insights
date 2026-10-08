@@ -6,8 +6,11 @@ export interface Config {
   dataDir: string;
   dbPath: string;
   openUsageUrl: string;
-  /** The local dashboard's port (always bound to 127.0.0.1). */
-  dashboardPort: number;
+  /**
+   * The local dashboard's address, for links (the Report). Never fails: a bad USAGE_INSIGHTS_PORT
+   * falls back to the default here; only the dashboard itself validates it (`dashboardPort`).
+   */
+  dashboardUrl: string;
   /** Codex CLI session logs, read by the Codex Backfill. */
   codexSessionsDir: string;
   /** Claude Code `projects` directories per Provider (personal and work account), read by the token Backfill. */
@@ -26,7 +29,7 @@ export const DEFAULT_OPENUSAGE_URL = "http://127.0.0.1:6736/v1/usage";
  * Settings from the environment:
  * - USAGE_INSIGHTS_DATA_DIR (default `~/Library/Application Support/usage-insights`)
  * - USAGE_INSIGHTS_OPENUSAGE_URL (default `http://127.0.0.1:6736/v1/usage`)
- * - USAGE_INSIGHTS_PORT (default 6740): the dashboard's port
+ * - USAGE_INSIGHTS_PORT (default 6740): the dashboard's port, validated only by the dashboard
  * - USAGE_INSIGHTS_CODEX_DIR (default `~/.codex/sessions`)
  * - USAGE_INSIGHTS_CLAUDE_DIR (default `~/.claude/projects`): Provider `claude`
  * - USAGE_INSIGHTS_CLAUDE_WORK_DIR (default `~/.claude-work/projects`): Provider `claude-work`
@@ -44,7 +47,7 @@ export function loadConfig(
     dataDir,
     dbPath: join(dataDir, "usage.db"),
     openUsageUrl: env.USAGE_INSIGHTS_OPENUSAGE_URL || DEFAULT_OPENUSAGE_URL,
-    dashboardPort: port(env.USAGE_INSIGHTS_PORT),
+    dashboardUrl: `http://127.0.0.1:${portOrDefault(env.USAGE_INSIGHTS_PORT)}`,
     codexSessionsDir: env.USAGE_INSIGHTS_CODEX_DIR || join(home, ".codex", "sessions"),
     claudeProjectDirs: [
       { provider: "claude", dir: env.USAGE_INSIGHTS_CLAUDE_DIR || join(home, ".claude", "projects") },
@@ -55,11 +58,25 @@ export function loadConfig(
   };
 }
 
-function port(value: string | undefined): number {
+/**
+ * The dashboard's port (always bound to 127.0.0.1): USAGE_INSIGHTS_PORT, default 6740. Throws for a
+ * value that is not a port. Only `bun run dashboard` calls this, so the Recorder, Backfills and
+ * Report never fail on a setting they do not use.
+ */
+export function dashboardPort(env: Record<string, string | undefined> = process.env): number {
+  const value = env.USAGE_INSIGHTS_PORT;
   if (!value) return DEFAULT_DASHBOARD_PORT;
   const n = Number(value);
   if (!Number.isInteger(n) || n < 1 || n > 65_535) {
     throw new Error(`USAGE_INSIGHTS_PORT must be a port number (1-65535), got "${value}"`);
   }
   return n;
+}
+
+function portOrDefault(value: string | undefined): number {
+  try {
+    return dashboardPort({ USAGE_INSIGHTS_PORT: value });
+  } catch {
+    return DEFAULT_DASHBOARD_PORT;
+  }
 }

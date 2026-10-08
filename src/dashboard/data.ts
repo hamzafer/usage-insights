@@ -1,5 +1,5 @@
 import { openStore } from "../store.ts";
-import type { DashboardData } from "./view-model.ts";
+import { type DashboardData, RECENT_RUNS } from "./view-model.ts";
 
 /** Reads everything the dashboard shows from the store at `dbPath`, opened per request. */
 export function loadDashboardData(dbPath: string): DashboardData {
@@ -10,6 +10,7 @@ export function loadDashboardData(dbPath: string): DashboardData {
       latest: store.latestReadings(),
       gaps: store.allGaps(),
       tokens: store.tokenUsage(),
+      runs: store.recentRuns(RECENT_RUNS),
     };
   } finally {
     store.close();

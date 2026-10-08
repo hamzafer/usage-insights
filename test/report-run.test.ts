@@ -132,3 +132,58 @@ test("Suggestions from the extension point reach the message; a throwing provide
   await runReport(throwing.d);
   expect(throwing.messenger.sent[0]).toContain("Suggestions unavailable: no key");
 });
+
+test("a setup failure (config, data directory, store) still sends the failure message, and nothing else runs", async () => {
+  const { d, messenger, saved, ran } = deps({
+    prepare: () => {
+      throw new Error("data directory not writable");
+    },
+  });
+  const result = await runReport(d);
+  expect(result.ok).toBe(false);
+  expect(ran).toEqual([]);
+  expect(saved).toEqual([]);
+  expect(messenger.sent).toEqual(["Usage Insights Report failed: data directory not writable"]);
+});
+
+test("outcomes of the Backfills and of the Report are recorded (time, ok or failed, reason)", async () => {
+  const runs: unknown[] = [];
+  const { d } = deps({
+    backfills: [
+      { name: "Codex", job: "backfill:codex", run: () => { throw new Error("unreadable"); } },
+      { name: "Token", job: "backfill:tokens", run: () => {} },
+    ],
+    recordRun: (r) => void runs.push(r),
+  });
+  await runReport(d);
+  expect(runs).toEqual([
+    { job: "backfill:codex", at: NOW, ok: false, reason: "unreadable" },
+    { job: "backfill:tokens", at: NOW, ok: true, reason: null },
+    { job: "report", at: NOW, ok: true, reason: null },
+  ]);
+});
+
+test("a failed Report is recorded as failed, with its reason", async () => {
+  const runs: { job: string; ok: boolean; reason: string | null }[] = [];
+  const { d } = deps({ load: () => { throw new Error("database is locked"); }, recordRun: (r) => void runs.push(r) });
+  await runReport(d);
+  expect(runs.at(-1)).toMatchObject({ job: "report", ok: false, reason: "database is locked" });
+});
+
+test("a failed send is recorded as a failed Report", async () => {
+  const runs: { job: string; ok: boolean; reason: string | null }[] = [];
+  const { d } = deps({
+    messenger: { send: async () => { throw new Error("Telegram send failed (HTTP 401)"); } },
+    recordRun: (r) => void runs.push(r),
+  });
+  await expect(runReport(d)).rejects.toThrow("HTTP 401");
+  expect(runs.at(-1)).toMatchObject({ job: "report", ok: false, reason: "Telegram send failed (HTTP 401)" });
+});
+
+test("--dry-run runs no Backfill and records nothing (it writes nothing)", async () => {
+  const runs: unknown[] = [];
+  const { d, ran } = deps({ dryRun: true, recordRun: (r) => void runs.push(r) });
+  await runReport(d);
+  expect(ran).toEqual(["load"]);
+  expect(runs).toEqual([]);
+});

@@ -1,3 +1,4 @@
+import { CALIBRATED_PROVIDER_IDS, LIVE_SOURCE } from "./providers.ts";
 import type { TokenEvent } from "./store.ts";
 import { formatTokens } from "./summary.ts";
 import { type CycleTokens, tokensByCycle, tokenTotal } from "./token-shares.ts";
@@ -14,14 +15,13 @@ import { deriveWindows, type Reading, type Window } from "./window-model.ts";
  */
 
 /** Providers whose past Waste is estimated from tokens. Codex logs record the limit (Measured). */
-export const CALIBRATED_PROVIDERS = ["claude", "claude-work"] as const;
+export const CALIBRATED_PROVIDERS: readonly string[] = CALIBRATED_PROVIDER_IDS;
 
 /** Intervals that moved used% and had tokens, needed before a calibration is used. */
 export const MIN_CALIBRATION_SAMPLES = 10;
 /** Total used% movement (percentage points) needed before a calibration is used. */
 export const MIN_CALIBRATION_MOVEMENT = 20;
 
-const LIVE_SOURCE = "openusage";
 const DEFAULT_LABELS: Record<"session" | "cycle", string> = { session: "Session", cycle: "Weekly" };
 
 export interface Calibration {
@@ -51,13 +51,13 @@ export function calibrate(readings: readonly Reading[], events: readonly TokenEv
     (r) =>
       r.source === LIVE_SOURCE &&
       (r.role === "session" || r.role === "cycle") &&
-      (CALIBRATED_PROVIDERS as readonly string[]).includes(r.provider),
+      CALIBRATED_PROVIDERS.includes(r.provider),
   );
   const windows = deriveWindows(live, now);
   const providers = [
     ...new Set([...live.map((r) => r.provider), ...events.map((e) => e.provider)]),
   ]
-    .filter((p) => (CALIBRATED_PROVIDERS as readonly string[]).includes(p))
+    .filter((p) => CALIBRATED_PROVIDERS.includes(p))
     .toSorted();
 
   return providers.flatMap((provider) => {
@@ -181,7 +181,7 @@ export function claudeCalibration(readings: readonly Reading[], events: readonly
     readings.filter((r) => r.role === "session" || r.role === "cycle"),
     now,
   );
-  const claudeEvents = events.filter((e) => (CALIBRATED_PROVIDERS as readonly string[]).includes(e.provider));
+  const claudeEvents = events.filter((e) => CALIBRATED_PROVIDERS.includes(e.provider));
   const calibrations = calibrate(readings, claudeEvents, now);
   const cycles = tokensByCycle(claudeEvents, windows, now);
   return { calibrations, estimates: estimateCycleWaste(cycles, calibrations, windows), cycles };

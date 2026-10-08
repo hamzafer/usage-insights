@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { loadConfig } from "../src/config.ts";
+import { dashboardPort, loadConfig } from "../src/config.ts";
 
 test("defaults: per-user data directory and OpenUsage on localhost", () => {
   const config = loadConfig({}, "/home/someone");
@@ -22,9 +22,15 @@ test("environment overrides the data directory and the OpenUsage URL", () => {
 });
 
 test("the dashboard listens on port 6740 unless USAGE_INSIGHTS_PORT says otherwise", () => {
-  expect(loadConfig({}, "/home/someone").dashboardPort).toBe(6740);
-  expect(loadConfig({ USAGE_INSIGHTS_PORT: "7001" }, "/home/someone").dashboardPort).toBe(7001);
-  expect(() => loadConfig({ USAGE_INSIGHTS_PORT: "web" }, "/home/someone")).toThrow("USAGE_INSIGHTS_PORT");
+  expect(dashboardPort({})).toBe(6740);
+  expect(dashboardPort({ USAGE_INSIGHTS_PORT: "7001" })).toBe(7001);
+  expect(() => dashboardPort({ USAGE_INSIGHTS_PORT: "web" })).toThrow("USAGE_INSIGHTS_PORT");
+});
+
+test("a bad USAGE_INSIGHTS_PORT never fails the other commands; the Report links the default port", () => {
+  const config = loadConfig({ USAGE_INSIGHTS_PORT: "web" }, "/home/someone");
+  expect(config.dashboardUrl).toBe("http://127.0.0.1:6740");
+  expect(loadConfig({ USAGE_INSIGHTS_PORT: "7001" }, "/home/someone").dashboardUrl).toBe("http://127.0.0.1:7001");
 });
 
 test("Codex session logs: ~/.codex/sessions unless USAGE_INSIGHTS_CODEX_DIR says otherwise", () => {

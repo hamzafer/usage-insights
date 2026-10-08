@@ -13,7 +13,7 @@ local API. Vocabulary: `GLOSSARY.md`. Decisions: `docs/adr/`.
 
 ```sh
 bun install
-bun run record   # one recording run: a Snapshot of every Provider, or a gap if OpenUsage is down
+bun run record   # one recording run: a Snapshot of every Provider (or a gap if OpenUsage is down), plus the Backfills once per hour
 bun run status   # latest reading per Provider and line, plus recent gaps
 bun run summary  # ended Cycles per Provider with their Waste ("low confidence" if readings were sparse)
 bun run backfill:codex  # past Codex readings from ~/.codex/sessions (Measured); rerun anytime, reads only new lines
@@ -34,7 +34,7 @@ Recorded data never lives in the repo (ADR 0002). It goes to
 | `USAGE_INSIGHTS_CODEX_DIR` | `~/.codex/sessions` |
 | `USAGE_INSIGHTS_CLAUDE_DIR` | `~/.claude/projects` (Provider `claude`) |
 | `USAGE_INSIGHTS_CLAUDE_WORK_DIR` | `~/.claude-work/projects` (Provider `claude-work`) |
-| `USAGE_INSIGHTS_PORT` | `6740` (dashboard) |
+| `USAGE_INSIGHTS_PORT` | `6740` (dashboard; only the dashboard checks it) |
 
 ## Dashboard
 
@@ -52,8 +52,8 @@ reload for new Snapshots. Pages:
 - **Projects and models** (`/projects`): token share per Project (a git repository, worktrees
   and subfolders merged; shown by folder name only) and per model for each Provider's last Cycles.
   Cycles before the first recorded Reset are stepped back in weeks and marked "dates inferred".
-- **Data health** (`/health`): last Snapshot per Provider, unclassified lines, recorder gaps and
-  stretches without Snapshots.
+- **Data health** (`/health`): last Snapshot per Provider, unclassified lines, recorder gaps,
+  failed Backfill and Report runs, and stretches without Snapshots.
 
 Estimated values are marked `~` and hatched, low-confidence Waste is flagged, and time without
 Snapshots is hatched as unknown, never drawn as zero. The same data is served as JSON under
@@ -68,7 +68,10 @@ scripts/install-launchd.sh "$PWD"
 ```
 
 Add `--print` to see the generated plist without installing it. Output goes to
-`recorder.log` in the data directory.
+`recorder.log` in the data directory. Each run also starts the Codex and token Backfills at most
+once per hour, so new log lines come in without running them by hand. Any failure (including a bad
+configuration or an unopenable store) is logged and the run still exits 0, so launchd keeps
+retrying every 5 minutes; Backfill failures show on the dashboard's data-health page.
 
 Uninstall (recorded data is kept):
 
@@ -76,11 +79,15 @@ Uninstall (recorded data is kept):
 scripts/uninstall-launchd.sh
 ```
 
+Both jobs (Recorder and Report) come from one template, `launchd/job.plist.template`, rendered by
+`scripts/launchd.sh install [--print] <recorder|report> <checkout>` (`uninstall <job>` removes one);
+the per-job scripts are thin wrappers around it.
+
 ## Weekly Report (Telegram)
 
 ```sh
 bun run report             # Backfills, then build, save and send the Report
-bun run report --dry-run   # print the card (HTML) and the full Report; send and save nothing
+bun run report --dry-run   # print the card (HTML) and the full Report; no Backfill, writes and sends nothing
 bun run report --test      # prefix the message with "[TEST] "
 ```
 
@@ -129,7 +136,7 @@ numbers section is sent: no log content, Projects by folder name only. If the ca
 Report still goes out with "Suggestions unavailable: <reason>".
 
 ```sh
-bun run setup:draft   # write a DRAFT setup.md if there is none (the Report does this too)
+bun run setup:draft   # write a DRAFT setup.md if there is none (a real Report run does this too)
 ```
 
 Reports say "Setup is a DRAFT" until you remove DRAFT from the file's first line.

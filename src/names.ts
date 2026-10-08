@@ -1,18 +1,13 @@
+import { providerInfo } from "./providers.ts";
+
 /**
  * Display names for Providers (OpenUsage's displayName) and models, used wherever a person reads
  * them (dashboard, Report). Stored data keeps the raw ids.
  */
 
-const PROVIDERS: Record<string, string> = {
-  claude: "Claude",
-  "claude-work": "Claude (Work)",
-  codex: "Codex",
-  cursor: "Cursor",
-  copilot: "Copilot",
-};
-
+/** The Provider's display name from the registry (src/providers.ts); an unknown id shows as is. */
 export function providerName(id: string): string {
-  return PROVIDERS[id] ?? id;
+  return providerInfo(id)?.displayName ?? id;
 }
 
 /**
