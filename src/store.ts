@@ -15,6 +15,8 @@ export interface StoredReading {
   plan: string | null;
   fetchedAt: string;
   recordedAt: string;
+  /** Where the reading came from: `openusage` (a Snapshot, the default) or `backfill:<provider>`. */
+  source?: string;
 }
 
 /** A recording run that got no Snapshot, and why (ADR 0001: gaps must be visible). */
@@ -73,12 +75,12 @@ export function openStore(path: string): Store {
 
   const insert = db.prepare(
     `INSERT OR IGNORE INTO readings
-       (provider, label, role, used, "limit", unit, resets_at, period_ms, plan, fetched_at, recorded_at)
-     VALUES ($provider, $label, $role, $used, $limit, $unit, $resetsAt, $periodMs, $plan, $fetchedAt, $recordedAt)`,
+       (provider, label, role, used, "limit", unit, resets_at, period_ms, plan, fetched_at, recorded_at, source)
+     VALUES ($provider, $label, $role, $used, $limit, $unit, $resetsAt, $periodMs, $plan, $fetchedAt, $recordedAt, $source)`,
   );
   const insertMany = db.transaction((rows: StoredReading[]) => {
     let added = 0;
-    for (const row of rows) added += insert.run({ ...row }).changes;
+    for (const row of rows) added += insert.run({ ...row, source: row.source ?? "openusage" }).changes;
     return added;
   });
 
