@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
 import type { LineRole } from "./classify.ts";
+import { LIVE_SOURCE } from "./providers.ts";
 import type { Reading } from "./window-model.ts";
 
 /** One stored progress line of one Snapshot. */
@@ -15,7 +16,7 @@ export interface StoredReading {
   plan: string | null;
   fetchedAt: string;
   recordedAt: string;
-  /** Where the reading came from: `openusage` (a Snapshot, the default) or `backfill:<provider>`. */
+  /** Where the reading came from: LIVE_SOURCE (a Snapshot, the default) or `backfill:<provider>`. */
   source?: string;
 }
 
@@ -165,7 +166,7 @@ export function openStore(path: string): Store {
   );
   const insertMany = db.transaction((rows: StoredReading[]) => {
     let added = 0;
-    for (const row of rows) added += insert.run({ ...row, source: row.source ?? "openusage" }).changes;
+    for (const row of rows) added += insert.run({ ...row, source: row.source ?? LIVE_SOURCE }).changes;
     return added;
   });
 
@@ -234,11 +235,11 @@ export function openStore(path: string): Store {
       db.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM readings").get()?.n ?? 0,
     livePlan: (provider) =>
       db
-        .query<{ plan: string | null }, [string]>(
-          `SELECT plan FROM readings WHERE provider = ? AND source = 'openusage'
+        .query<{ plan: string | null }, [string, string]>(
+          `SELECT plan FROM readings WHERE provider = ? AND source = ?
             ORDER BY fetched_at DESC, id DESC LIMIT 1`,
         )
-        .get(provider)?.plan ?? null,
+        .get(provider, LIVE_SOURCE)?.plan ?? null,
     backfillOffset: (source, path) =>
       db
         .query<{ offset: number }, [string, string]>(

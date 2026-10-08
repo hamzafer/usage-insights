@@ -1,3 +1,4 @@
+import { basisOfSource } from "./providers.ts";
 import type { Basis, Window } from "./window-model.ts";
 
 /**
@@ -48,7 +49,7 @@ export function paceOfRunningCycles(windows: readonly Window[]): Pace[] {
         lastReadingAt: last.fetchedAt,
         usedShare: last.limit > 0 ? last.used / last.limit : 0,
         periodMs,
-        basis: (last.source.startsWith("backfill:claude") ? "estimated" : "measured") as Basis,
+        basis: basisOfSource(last.source),
       };
       const none = { ...base, projectedShare: null, expectedWaste: null, projectedLimitHitAt: null };
       if (!w.resetsAt || last.limit <= 0) return none;

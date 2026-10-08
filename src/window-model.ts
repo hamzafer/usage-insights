@@ -1,4 +1,5 @@
 import type { LineRole } from "./classify.ts";
+import { basisOfSource } from "./providers.ts";
 
 /**
  * Window Model (spec §3): turns stored readings into Windows and their results.
@@ -143,7 +144,7 @@ function wasteAt(window: Reading[], endedAt: string): Waste | null {
     share: Math.min(1, Math.max(0, (last.limit - last.used) / last.limit)),
     lastReadingAt: last.fetchedAt,
     lowConfidence: ms(endedAt) - ms(last.fetchedAt) > LOW_CONFIDENCE_GAP_MS,
-    basis: last.source.startsWith("backfill:claude") ? "estimated" : "measured",
+    basis: basisOfSource(last.source),
   };
 }
 

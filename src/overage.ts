@@ -1,3 +1,4 @@
+import { providerInfo } from "./providers.ts";
 import type { Reading, Window } from "./window-model.ts";
 
 /**
@@ -17,15 +18,9 @@ export interface CycleOverage {
   spent: number;
 }
 
-/** Units of the Overage lines (spec: Line classification), by Provider then label. */
-const OVERAGE_UNITS: Record<string, Record<string, string>> = {
-  "claude-work": { "Extra usage spent": "$" },
-  cursor: { "On-demand": "$" },
-  codex: { "Workspace Credits": "credits" },
-};
-
+/** The Overage line's unit from the Provider registry (src/providers.ts); "units" when unknown. */
 export function overageUnit(provider: string, label: string): string {
-  return OVERAGE_UNITS[provider]?.[label] ?? "units";
+  return providerInfo(provider)?.overageUnits[label] ?? "units";
 }
 
 /**

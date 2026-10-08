@@ -4,6 +4,7 @@ import type { CycleOverage } from "../overage.ts";
 import type { Pace } from "../pace.ts";
 import { idleCapacity, READING_GAP_TOLERANCE_MS } from "../sessions.ts";
 import type { Gap, RunOutcome, StoredReading, TokenEvent } from "../store.ts";
+import { LIVE_SOURCE } from "../providers.ts";
 import { type CycleTokens, tokensByCycle } from "../token-shares.ts";
 import { deriveWindows, type Reading, type Waste, type Window } from "../window-model.ts";
 
@@ -132,8 +133,6 @@ export const RECENT_RUNS = 200;
 /** A Provider whose newest Snapshot is older than this is stale. */
 export const STALE_AFTER_MS = 30 * 60_000;
 
-const RECORDER_SOURCE = "openusage";
-
 export function buildOverview(data: DashboardData, now: string | Date): ProviderOverview[] {
   const nowMs = toMs(now);
   const windows = analysedWindows(data.readings, now);
@@ -211,7 +210,7 @@ export function buildHealth(data: DashboardData, now: string | Date): DataHealth
     calibration: claude.calibrations,
     estimatedWaste: claude.estimates.toReversed(),
     providers: providers.map((provider) => {
-      const snapshots = byProvider.get(provider)!.filter((r) => r.source === RECORDER_SOURCE);
+      const snapshots = byProvider.get(provider)!.filter((r) => r.source === LIVE_SOURCE);
       const newest = snapshots.length ? Math.max(...snapshots.map((r) => toMs(r.fetchedAt))) : null;
       return {
         provider,
@@ -262,7 +261,7 @@ function endedResults(windows: readonly Window[]): CycleResult[] {
 
 /** Stretches longer than SNAPSHOT_GAP_MS between one Provider's recorded Snapshots, and up to now. */
 function snapshotGaps(readings: readonly Reading[], now: string | Date): Span[] {
-  const times = [...new Set(readings.filter((r) => r.source === RECORDER_SOURCE).map((r) => toMs(r.fetchedAt)))].toSorted(
+  const times = [...new Set(readings.filter((r) => r.source === LIVE_SOURCE).map((r) => toMs(r.fetchedAt)))].toSorted(
     (a, b) => a - b,
   );
   if (times.length === 0) return [];
