@@ -1,3 +1,5 @@
+import { type Backfill, backfillJob } from "../backfill/jobs.ts";
+import type { RunOutcome } from "../store.ts";
 import { buildReport, type ReportInput } from "./build.ts";
 import { escapeHtml } from "./format.ts";
 import { renderMarkdown, renderTelegram } from "./render.ts";
@@ -7,17 +9,21 @@ import type { Messenger } from "./telegram.ts";
 /**
  * One Report run (`bun run report`, spec §6): refresh data with the incremental Backfills, build
  * the Report for the 7 days before now, save the full Markdown and send the compact card (HTML). If
- * building fails, a short "Usage Insights Report failed: <reason>" message goes out instead.
+ * anything before sending fails (setup, loading, building), a short "Usage Insights Report failed:
+ * <reason>" message goes out instead. Each Backfill's and the Report's outcome is recorded, so the
+ * dashboard's data-health page shows failures (spec: Error handling).
  */
 
-export interface Backfill {
-  name: string;
-  run: () => void | Promise<void>;
-}
+export type { Backfill };
 
 export interface ReportDeps {
   now: () => Date;
-  /** Run first, in order; a failure is logged and noted in the Report, and the run goes on. */
+  /**
+   * Runs first: configuration, data directory, store. When it throws, the failure message goes out
+   * and nothing else runs (no Backfill, no Report).
+   */
+  prepare?: () => void;
+  /** Run first, in order; a failure is logged and noted in the Report, and the run goes on. Skipped on a dry run. */
   backfills: readonly Backfill[];
   /** Reads the stored data (after the Backfills). */
   load: () => Omit<ReportInput, "now" | "dataNotes">;
@@ -28,11 +34,13 @@ export interface ReportDeps {
   print: (text: string) => void;
   /** Progress and problems (the launchd log). Never given secrets. */
   log: (line: string) => void;
+  /** Records each Backfill's and the Report's outcome (never on a dry run). A failure here is only logged. */
+  recordRun?: (outcome: RunOutcome) => void;
   /** Claude-written Suggestions; none (no section) when omitted. */
   suggestions?: SuggestionsProvider;
   timeZone?: string;
   dashboardUrl?: string;
-  /** Print the message and the Report; send and save nothing. */
+  /** Print the message and the Report; run no Backfill, and send, save and record nothing. */
   dryRun?: boolean;
   /** Prefix the message with "[TEST] ". */
   test?: boolean;
@@ -46,24 +54,41 @@ export interface ReportRunResult {
   file: string | null;
 }
 
-export async function runReport(deps: ReportDeps): Promise<ReportRunResult> {
-  const notes: string[] = [];
-  for (const b of deps.backfills) {
-    try {
-      await b.run();
-    } catch (e) {
-      const note = `${b.name} Backfill failed: ${reason(e)}`;
-      notes.push(note);
-      deps.log(note);
-    }
-  }
+export const REPORT_JOB = "report";
 
-  const now = deps.now();
+export async function runReport(deps: ReportDeps): Promise<ReportRunResult> {
   const prefix = deps.test ? "[TEST] " : "";
+  const record = (job: string, error: unknown | null) => {
+    if (deps.dryRun || !deps.recordRun) return;
+    try {
+      deps.recordRun({ job, at: deps.now().toISOString(), ok: error === null, reason: error === null ? null : reason(error) });
+    } catch (e) {
+      deps.log(`Could not record the ${job} outcome: ${reason(e)}`);
+    }
+  };
+
   let message: string;
   let markdown: string | null = null;
   let file: string | null = null;
+  let failure: unknown | null = null;
   try {
+    deps.prepare?.();
+
+    const notes: string[] = [];
+    for (const b of deps.dryRun ? [] : deps.backfills) {
+      const job = backfillJob(b);
+      try {
+        await b.run();
+        record(job, null);
+      } catch (e) {
+        const note = `${b.name} Backfill failed: ${reason(e)}`;
+        notes.push(note);
+        deps.log(note);
+        record(job, e);
+      }
+    }
+
+    const now = deps.now();
     const report = buildReport({ ...deps.load(), now: now.toISOString(), dataNotes: notes });
     const suggestions = await suggest(deps.suggestions ?? noSuggestions, report);
     const reportFile = `reports/${localDate(now, deps.timeZone)}.md`;
@@ -75,6 +100,8 @@ export async function runReport(deps: ReportDeps): Promise<ReportRunResult> {
       file = reportFile;
     }
   } catch (e) {
+    markdown = null;
+    failure = e;
     deps.log(`Report failed: ${reason(e)}`);
     message = `${prefix}Usage Insights Report failed: ${escapeHtml(reason(e))}`;
   }
@@ -83,9 +110,15 @@ export async function runReport(deps: ReportDeps): Promise<ReportRunResult> {
     deps.print(message);
     if (markdown) deps.print(`\n--- Full Report (dry run: not saved) ---\n\n${markdown}`);
   } else {
-    await deps.messenger.send(message);
+    try {
+      await deps.messenger.send(message);
+    } catch (e) {
+      record(REPORT_JOB, e);
+      throw e;
+    }
     deps.log(file ? `Report sent; saved ${file}` : "Failure message sent");
   }
+  record(REPORT_JOB, failure);
   return { ok: markdown !== null, message, file };
 }
 

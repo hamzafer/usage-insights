@@ -59,3 +59,17 @@ test("readingsWithRole lists readings of the given roles with their source, olde
   expect(store.readingsWithRole(["cycle", "session"])).toHaveLength(3);
   store.close();
 });
+
+test("run outcomes: newest first, failures with their reason, and the last run time per job", () => {
+  const store = openStore(join(mkdtempSync(join(tmpdir(), "usage-insights-test-")), "usage.db"));
+  expect(store.lastRunAt("backfill:codex")).toBeNull();
+  store.saveRun({ job: "backfill:codex", at: "2026-01-05T10:00:00.000Z", ok: true, reason: null });
+  store.saveRun({ job: "report", at: "2026-01-05T11:00:00.000Z", ok: false, reason: "database is locked" });
+  store.saveRun({ job: "backfill:codex", at: "2026-01-05T12:00:00.000Z", ok: false, reason: "unreadable" });
+  expect(store.recentRuns(2)).toEqual([
+    { job: "backfill:codex", at: "2026-01-05T12:00:00.000Z", ok: false, reason: "unreadable" },
+    { job: "report", at: "2026-01-05T11:00:00.000Z", ok: false, reason: "database is locked" },
+  ]);
+  expect(store.lastRunAt("backfill:codex")).toBe("2026-01-05T12:00:00.000Z");
+  store.close();
+});

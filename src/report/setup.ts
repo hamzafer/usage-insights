@@ -31,6 +31,12 @@ export function isDraftSetup(text: string): boolean {
   return (text.split("\n", 1)[0] ?? "").includes("DRAFT");
 }
 
+/** Reads `<dataDir>/setup.md`, or returns the DRAFT template when it is missing. Writes nothing (dry runs). */
+export function peekSetup(dataDir: string): string {
+  const path = join(dataDir, SETUP_FILE);
+  return existsSync(path) ? readFileSync(path, "utf8") : DRAFT_TEMPLATE;
+}
+
 /** Reads `<dataDir>/setup.md`, first writing the DRAFT template when it is missing. Never overwrites. */
 export function ensureSetup(dataDir: string): { created: boolean; text: string } {
   const path = join(dataDir, SETUP_FILE);

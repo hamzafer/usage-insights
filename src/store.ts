@@ -50,6 +50,16 @@ export interface Gap {
   reason: string;
 }
 
+/** The outcome of one Backfill or Report run (spec: Error handling: failures are visible). */
+export interface RunOutcome {
+  /** `backfill:codex`, `backfill:tokens` or `report`. */
+  job: string;
+  at: string;
+  ok: boolean;
+  /** Why it failed; null when it went fine. */
+  reason: string | null;
+}
+
 /**
  * Schema migrations, applied in order. The database's `user_version` pragma holds how many
  * have run. Never edit a shipped migration; append a new one.
@@ -98,6 +108,16 @@ const MIGRATIONS: string[] = [
      output      INTEGER NOT NULL
    );
    CREATE INDEX token_events_by_time ON token_events (at);`,
+  // Outcomes of Backfill and Report runs (spec: Error handling), shown on the data-health page and
+  // used to run the automatic Backfills at most once per hour.
+  `CREATE TABLE runs (
+     id          INTEGER PRIMARY KEY,
+     job         TEXT NOT NULL,
+     at          TEXT NOT NULL,
+     ok          INTEGER NOT NULL,
+     reason      TEXT
+   );
+   CREATE INDEX runs_by_job ON runs (job, at);`,
 ];
 
 export interface Store {
@@ -125,6 +145,11 @@ export interface Store {
   saveTokenEvents(events: KeyedTokenEvent[]): number;
   /** Token events, oldest first; only those at or after `from` and before `to` when given. */
   tokenUsage(range?: { from?: string; to?: string }): TokenEvent[];
+  saveRun(outcome: RunOutcome): void;
+  /** The newest run outcomes first. */
+  recentRuns(limit: number): RunOutcome[];
+  /** When the job last ran (ok or not), or null. */
+  lastRunAt(job: string): string | null;
   close(): void;
 }
 
@@ -226,6 +251,23 @@ export function openStore(path: string): Store {
            ON CONFLICT (source, path) DO UPDATE SET offset = excluded.offset`,
       ).run(source, path, offset);
     },
+    saveRun: (outcome) => {
+      db.query("INSERT INTO runs (job, at, ok, reason) VALUES (?, ?, ?, ?)").run(
+        outcome.job,
+        outcome.at,
+        outcome.ok ? 1 : 0,
+        outcome.reason,
+      );
+    },
+    recentRuns: (limit) =>
+      db
+        .query<{ job: string; at: string; ok: number; reason: string | null }, [number]>(
+          "SELECT job, at, ok, reason FROM runs ORDER BY at DESC, id DESC LIMIT ?",
+        )
+        .all(limit)
+        .map((r) => ({ ...r, ok: r.ok === 1 })),
+    lastRunAt: (job) =>
+      db.query<{ at: string | null }, [string]>("SELECT MAX(at) AS at FROM runs WHERE job = ?").get(job)?.at ?? null,
     close: () => db.close(),
   };
 }

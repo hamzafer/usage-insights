@@ -24,6 +24,10 @@ function run(script: string, openUsageUrl: string, extraEnv: Record<string, stri
       ...process.env,
       USAGE_INSIGHTS_DATA_DIR: dataDir,
       USAGE_INSIGHTS_OPENUSAGE_URL: openUsageUrl,
+      // The Recorder's automatic Backfills must never read this machine's real logs.
+      USAGE_INSIGHTS_CODEX_DIR: join(dataDir, "no-codex"),
+      USAGE_INSIGHTS_CLAUDE_DIR: join(dataDir, "no-claude"),
+      USAGE_INSIGHTS_CLAUDE_WORK_DIR: join(dataDir, "no-claude-work"),
       ...extraEnv,
     },
   });
@@ -55,6 +59,29 @@ describe("record and status", () => {
     const status = run("src/cli/status.ts", deadUrl);
     expect(status.out).toContain("No Snapshots recorded yet.");
     expect(status.out).toContain("Recent gaps");
+  });
+
+  test("record starts the automatic Backfills at most once per hour and records their outcomes", () => {
+    expect(run("src/cli/record.ts", liveUrl()).code).toBe(0);
+    expect(run("src/cli/record.ts", liveUrl()).code).toBe(0);
+    const store = openStore(join(dataDir, "usage.db"));
+    expect(store.recentRuns(10).map((r) => r.job).toSorted()).toEqual(["backfill:codex", "backfill:tokens"]);
+    store.close();
+  });
+
+  test("record ignores a bad USAGE_INSIGHTS_PORT (only the dashboard uses it)", () => {
+    const recorded = run("src/cli/record.ts", liveUrl(), { USAGE_INSIGHTS_PORT: "web" });
+    expect(recorded.code).toBe(0);
+    expect(recorded.out).toContain("stored 14 lines");
+  });
+
+  test("record logs a store that cannot be opened and exits 0, so launchd keeps scheduling it", () => {
+    // The data directory is a file: neither it nor the database can be created.
+    const notADir = join(dataDir, "file");
+    writeFileSync(notADir, "");
+    const recorded = run("src/cli/record.ts", liveUrl(), { USAGE_INSIGHTS_DATA_DIR: notADir });
+    expect(recorded.code).toBe(0);
+    expect(recorded.out).toContain("Recorder run failed:");
   });
 });
 

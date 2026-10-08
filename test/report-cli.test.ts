@@ -65,14 +65,28 @@ test("an unknown option is refused", () => {
   expect(run("--send-now").code).toBe(64);
 });
 
-test("a missing Setup file is drafted, and a failed Claude call still lets the Report out", () => {
+test("--dry-run with no Setup file uses the DRAFT template but writes nothing; a failed Claude call still lets the Report out", () => {
   const out = run("--dry-run");
   expect(out.code).toBe(0);
   expect(out.out).toContain("Setup is a DRAFT");
   expect(out.out).toContain("Suggestions unavailable: Claude API unreachable");
   expect(out.out).toContain("## Numbers");
   expect(out.out).not.toContain("test-key");
+  expect(existsSync(join(dataDir, "setup.md"))).toBe(false);
+  expect(existsSync(join(dataDir, "reports"))).toBe(false);
+  const store = openStore(join(dataDir, "usage.db"));
+  expect(store.recentRuns(10)).toEqual([]);
+  store.close();
+});
+
+test("a real run drafts a missing Setup file and records each outcome (the send failed here: no Telegram config)", () => {
+  run();
   expect(readFileSync(join(dataDir, "setup.md"), "utf8").split("\n")[0]).toContain("DRAFT");
+  const store = openStore(join(dataDir, "usage.db"));
+  const runs = store.recentRuns(10);
+  expect(runs.map((r) => `${r.job} ${r.ok}`).toSorted()).toEqual(["backfill:codex true", "backfill:tokens true", "report false"]);
+  expect(runs.find((r) => r.job === "report")!.reason).toContain("Telegram bot token not found");
+  store.close();
 });
 
 test("setup:draft writes the DRAFT template once and never overwrites", () => {
