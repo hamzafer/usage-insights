@@ -106,14 +106,21 @@ function windowsOfLine(line: Reading[], nowMs: number): Window[] {
 function startsNewWindow(window: Reading[], r: Reading): boolean {
   const last = window.at(-1)!;
   if (!hasStarted(window) && hasStarted([r])) return true;
+  // A Reset time the Window already reported, or one minutes from it (a flip-flop), is not a Reset.
+  if (r.resetsAt && reportedNear(window, r.resetsAt)) return false;
   const reset = knownReset(window);
   if (reset && r.resetsAt && ms(r.resetsAt) - ms(reset) > RESET_TOLERANCE_MS) return true;
   // Fetched after the Reset: a new Window, unless the reading still reports the old Reset (stale).
   const reportsSameReset = r.resetsAt && Math.abs(ms(r.resetsAt) - ms(reset ?? r.resetsAt)) <= RESET_TOLERANCE_MS;
-  if (reset && !reportsSameReset && ms(r.fetchedAt) - ms(reset) > RESET_TOLERANCE_MS) return true;
+  if (reset && !reportsSameReset &&ms(r.fetchedAt) - ms(reset) > RESET_TOLERANCE_MS) return true;
   const before = share(last);
   const after = share(r);
   return after <= NEAR_ZERO_SHARE && before - after >= MIN_RESET_DROP;
+}
+
+/** True when `resetsAt` is within the flip-flop tolerance of a Reset the Window's readings reported. */
+function reportedNear(window: Reading[], resetsAt: string): boolean {
+  return window.some((w) => w.resetsAt && Math.abs(ms(w.resetsAt) - ms(resetsAt)) <= FLIP_FLOP_TOLERANCE_MS);
 }
 
 /**
@@ -145,9 +152,12 @@ export function hasStarted(readings: readonly Reading[]): boolean {
   return readings.some((r) => r.used > 0 || r.resetsAt !== null);
 }
 
-/** The Window's Reset, rounded to the minute: the first one any of its readings reported. */
+/**
+ * The Window's Reset, rounded to the minute: the last one its readings reported. After a
+ * flip-flop that is the Reset the readings settled on; otherwise every reading reports the same.
+ */
 function knownReset(window: Reading[]): string | null {
-  const reported = window.find((r) => r.resetsAt)?.resetsAt;
+  const reported = window.findLast((r) => r.resetsAt)?.resetsAt;
   return reported ? roundToMinute(reported) : null;
 }
 
@@ -165,6 +175,13 @@ export const LOW_CONFIDENCE_GAP_MS = 30 * 60_000;
 
 /** Reported reset times within this of each other are the same Reset (jitter and drift). */
 const RESET_TOLERANCE_MS = 5 * 60_000;
+
+/**
+ * Reset times this close to one the Window already reported are a flip-flop, not a new Reset.
+ * After an early Reset, Codex logs were seen alternating between two Reset times 17 minutes apart.
+ * A genuine Reset moves the Reset time by a whole Window length, far more than this.
+ */
+const FLIP_FLOP_TOLERANCE_MS = 60 * 60_000;
 
 function roundToMinute(iso: string): string {
   return new Date(Math.round(ms(iso) / 60_000) * 60_000).toISOString();
