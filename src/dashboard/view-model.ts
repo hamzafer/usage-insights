@@ -3,7 +3,7 @@ import { limitsOverageAndPace } from "../limits-summary.ts";
 import type { CycleOverage } from "../overage.ts";
 import type { Pace } from "../pace.ts";
 import { idleCapacity, READING_GAP_TOLERANCE_MS } from "../sessions.ts";
-import type { Gap, StoredReading, TokenEvent } from "../store.ts";
+import type { Gap, RunOutcome, StoredReading, TokenEvent } from "../store.ts";
 import { type CycleTokens, tokensByCycle } from "../token-shares.ts";
 import { deriveWindows, type Reading, type Waste, type Window } from "../window-model.ts";
 
@@ -22,6 +22,8 @@ export interface DashboardData {
   gaps: Gap[];
   /** Token events from the token Backfill, oldest first; none when omitted. */
   tokens?: TokenEvent[];
+  /** The newest Backfill and Report run outcomes, newest first; none when omitted. */
+  runs?: RunOutcome[];
 }
 
 export interface CycleResult {
@@ -100,6 +102,8 @@ export interface DataHealth {
   providers: ProviderHealth[];
   unclassified: { provider: string; label: string; lastSeenAt: string }[];
   recorderGaps: Gap[];
+  /** Failed Backfill and Report runs among the newest RECENT_RUNS, newest first. */
+  failedRuns: RunOutcome[];
   /** Stretches without Snapshots per Provider, newest first. */
   snapshotGaps: (Span & { provider: string })[];
   /** Claude calibration per account and line: samples, tokens per 1%, ready or calibrating. */
@@ -123,6 +127,8 @@ export const LIMIT_HIT_LOOKBACK_MS = 28 * 24 * 3_600_000;
 export const SNAPSHOT_GAP_MS = READING_GAP_TOLERANCE_MS;
 /** How many recorder gaps the data-health page lists. */
 export const RECENT_GAPS = 200;
+/** How many of the newest Backfill and Report run outcomes the data-health page looks at. */
+export const RECENT_RUNS = 200;
 /** A Provider whose newest Snapshot is older than this is stale. */
 export const STALE_AFTER_MS = 30 * 60_000;
 
@@ -217,6 +223,7 @@ export function buildHealth(data: DashboardData, now: string | Date): DataHealth
       .filter((r) => r.role === "unclassified")
       .map((r) => ({ provider: r.provider, label: r.label, lastSeenAt: r.fetchedAt })),
     recorderGaps: data.gaps.toReversed().slice(0, RECENT_GAPS),
+    failedRuns: (data.runs ?? []).filter((r) => !r.ok),
     snapshotGaps: providers
       .flatMap((provider) => snapshotGaps(byProvider.get(provider)!, now).map((g) => ({ provider, ...g })))
       .toSorted((a, b) => toMs(b.from) - toMs(a.from)),
