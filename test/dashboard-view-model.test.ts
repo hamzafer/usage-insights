@@ -28,6 +28,8 @@ describe("overview", () => {
     expect(running.resetsAt).toBe("2026-10-08T00:00:00.000Z");
     expect(running.pace.expectedWaste).not.toBeNull();
     expect(running.pace.expectedWaste!).toBeLessThan(0.6);
+    // From the previous Reset (10-01 00:00) to now is 4.5 of 7 days.
+    expect(running.elapsedShare).toBeCloseTo(4.5 / 7);
   });
 
   test("counts Limit Hits of the last 28 days with their Blocked Time", () => {
@@ -51,6 +53,8 @@ describe("overview", () => {
     const [cursor] = buildOverview(data, NOW);
     expect(cursor!.lastCycles).toEqual([]);
     expect(cursor!.running[0]!.pace.expectedWaste).toBeNull();
+    // Its start is unknown without a previous Reset.
+    expect(cursor!.running[0]!.elapsedShare).toBeNull();
   });
 });
 

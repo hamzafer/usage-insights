@@ -32,6 +32,8 @@ export interface RunningCycle {
   resetsAt: string | null;
   /** Share of the allowance used at the newest reading, 0..1. */
   usedShare: number;
+  /** How far through the Cycle `now` is, 0..1; null while its start (the previous Reset) is unknown. */
+  elapsedShare: number | null;
   pace: Pace;
 }
 
@@ -116,10 +118,13 @@ export function buildOverview(data: DashboardData, now: string | Date): Provider
       .filter((w) => !w.endedAt)
       .map((w) => {
         const last = w.readings.at(-1)!;
+        const start = ended.findLast((c) => c.label === w.label)?.endedAt;
+        const length = start && w.resetsAt ? toMs(w.resetsAt) - toMs(start) : 0;
         return {
           label: w.label,
           resetsAt: w.resetsAt,
           usedShare: last.limit > 0 ? last.used / last.limit : 0,
+          elapsedShare: length > 0 ? Math.min(1, Math.max(0, (nowMs - toMs(start!)) / length)) : null,
           pace: pace.find((p) => p.provider === provider && p.label === w.label)!,
         };
       });

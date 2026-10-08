@@ -20,3 +20,9 @@ test("environment overrides the data directory and the OpenUsage URL", () => {
   expect(config.dbPath).toBe("/tmp/ui-data/usage.db");
   expect(config.openUsageUrl).toBe("http://127.0.0.1:9999/v1/usage");
 });
+
+test("the dashboard listens on port 6740 unless USAGE_INSIGHTS_PORT says otherwise", () => {
+  expect(loadConfig({}, "/home/someone").dashboardPort).toBe(6740);
+  expect(loadConfig({ USAGE_INSIGHTS_PORT: "7001" }, "/home/someone").dashboardPort).toBe(7001);
+  expect(() => loadConfig({ USAGE_INSIGHTS_PORT: "web" }, "/home/someone")).toThrow("USAGE_INSIGHTS_PORT");
+});
