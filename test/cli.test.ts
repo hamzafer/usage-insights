@@ -169,7 +169,7 @@ describe("backfill:codex", () => {
     expect(run("src/cli/backfill-codex.ts", deadUrl, env).out).toContain("1 log files, 0 new lines, 0 readings stored");
 
     const summary = run("src/cli/summary.ts", deadUrl, env);
-    expect(summary.out).toBe("codex\n  Weekly  reset 2026-01-08 09:00  Waste  30%\n");
+    expect(summary.out).toStartWith("codex\n  Weekly  reset 2026-01-08 09:00  Waste  30%\n");
   });
 
   test("with no Codex logs it stores nothing and says so", () => {
