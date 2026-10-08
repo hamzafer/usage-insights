@@ -1,0 +1,121 @@
+import { Database } from "bun:sqlite";
+import type { LineRole } from "./classify.ts";
+
+/** One stored progress line of one Snapshot. */
+export interface StoredReading {
+  provider: string;
+  label: string;
+  role: LineRole;
+  used: number;
+  limit: number;
+  unit: string;
+  resetsAt: string | null;
+  periodMs: number | null;
+  plan: string | null;
+  fetchedAt: string;
+  recordedAt: string;
+}
+
+/** A recording run that got no Snapshot, and why (ADR 0001: gaps must be visible). */
+export interface Gap {
+  recordedAt: string;
+  reason: string;
+}
+
+/**
+ * Schema migrations, applied in order. The database's `user_version` pragma holds how many
+ * have run. Never edit a shipped migration; append a new one.
+ */
+const MIGRATIONS: string[] = [
+  `CREATE TABLE readings (
+     id          INTEGER PRIMARY KEY,
+     provider    TEXT NOT NULL,
+     label       TEXT NOT NULL,
+     role        TEXT NOT NULL,
+     used        REAL NOT NULL,
+     "limit"     REAL NOT NULL,
+     unit        TEXT NOT NULL,
+     resets_at   TEXT,
+     period_ms   INTEGER,
+     plan        TEXT,
+     fetched_at  TEXT NOT NULL,
+     recorded_at TEXT NOT NULL,
+     source      TEXT NOT NULL DEFAULT 'openusage',
+     UNIQUE (provider, label, fetched_at)
+   );
+   CREATE INDEX readings_by_line ON readings (provider, label, fetched_at);
+   CREATE TABLE gaps (
+     id          INTEGER PRIMARY KEY,
+     recorded_at TEXT NOT NULL,
+     reason      TEXT NOT NULL
+   );`,
+];
+
+export interface Store {
+  /** Stores readings, skipping any already stored. Returns how many rows were new. */
+  saveReadings(readings: StoredReading[]): number;
+  saveGap(gap: Gap): void;
+  /** The newest reading of every (provider, label), sorted by provider then label. */
+  latestReadings(): StoredReading[];
+  /** The newest gaps first. */
+  recentGaps(limit: number): Gap[];
+  countReadings(): number;
+  close(): void;
+}
+
+export function openStore(path: string): Store {
+  const db = new Database(path, { create: true, strict: true });
+  db.exec("PRAGMA journal_mode = WAL;");
+  migrate(db);
+
+  const insert = db.prepare(
+    `INSERT OR IGNORE INTO readings
+       (provider, label, role, used, "limit", unit, resets_at, period_ms, plan, fetched_at, recorded_at)
+     VALUES ($provider, $label, $role, $used, $limit, $unit, $resetsAt, $periodMs, $plan, $fetchedAt, $recordedAt)`,
+  );
+  const insertMany = db.transaction((rows: StoredReading[]) => {
+    let added = 0;
+    for (const row of rows) added += insert.run({ ...row }).changes;
+    return added;
+  });
+
+  return {
+    saveReadings: (readings) => insertMany(readings),
+    saveGap: (gap) => {
+      db.query("INSERT INTO gaps (recorded_at, reason) VALUES ($recordedAt, $reason)").run({ ...gap });
+    },
+    latestReadings: () =>
+      db
+        .query<StoredReading, []>(
+          `SELECT provider, label, role, used, "limit", unit,
+                  resets_at AS resetsAt, period_ms AS periodMs, plan,
+                  fetched_at AS fetchedAt, recorded_at AS recordedAt
+             FROM readings r
+            WHERE fetched_at = (SELECT MAX(fetched_at) FROM readings
+                                 WHERE provider = r.provider AND label = r.label)
+            ORDER BY provider, label`,
+        )
+        .all(),
+    recentGaps: (limit) =>
+      db
+        .query<Gap, [number]>(
+          `SELECT recorded_at AS recordedAt, reason FROM gaps
+            ORDER BY recorded_at DESC, id DESC LIMIT ?`,
+        )
+        .all(limit),
+    countReadings: () =>
+      db.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM readings").get()?.n ?? 0,
+    close: () => db.close(),
+  };
+}
+
+function migrate(db: Database): void {
+  const current = db.query<{ user_version: number }, []>("PRAGMA user_version").get()
+    ?.user_version ?? 0;
+  for (let version = current; version < MIGRATIONS.length; version++) {
+    db.transaction(() => {
+      db.exec(MIGRATIONS[version]!);
+      db.exec(`PRAGMA user_version = ${version + 1}`);
+    })();
+  }
+}
