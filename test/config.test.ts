@@ -31,3 +31,16 @@ test("Codex session logs: ~/.codex/sessions unless USAGE_INSIGHTS_CODEX_DIR says
   expect(loadConfig({}, "/home/someone").codexSessionsDir).toBe("/home/someone/.codex/sessions");
   expect(loadConfig({ USAGE_INSIGHTS_CODEX_DIR: "/tmp/codex" }, "/home/someone").codexSessionsDir).toBe("/tmp/codex");
 });
+
+test("Claude Code logs: both accounts' projects directories unless the environment says otherwise", () => {
+  expect(loadConfig({}, "/home/someone").claudeProjectDirs).toEqual([
+    { provider: "claude", dir: "/home/someone/.claude/projects" },
+    { provider: "claude-work", dir: "/home/someone/.claude-work/projects" },
+  ]);
+  expect(
+    loadConfig({ USAGE_INSIGHTS_CLAUDE_DIR: "/tmp/c", USAGE_INSIGHTS_CLAUDE_WORK_DIR: "/tmp/cw" }, "/home/someone").claudeProjectDirs,
+  ).toEqual([
+    { provider: "claude", dir: "/tmp/c" },
+    { provider: "claude-work", dir: "/tmp/cw" },
+  ]);
+});

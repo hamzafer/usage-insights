@@ -1,6 +1,8 @@
 import { HATCH_DEFS, idleColumns, seriesSlot, sessionDots, wasteColumns } from "./charts.ts";
 import { escapeHtml as e, formatAmount, formatDuration, formatShare, formatTime, type FormatOptions } from "./format.ts";
-import { type DataHealth, type ProviderHistory, type ProviderOverview, type RunningCycle, SNAPSHOT_GAP_MS } from "./view-model.ts";
+import { formatTokens } from "../summary.ts";
+import type { CycleTokens, Share } from "../token-shares.ts";
+import { type DataHealth, type ProjectsPage, type ProviderHistory, type ProviderOverview, type RunningCycle, SNAPSHOT_GAP_MS } from "./view-model.ts";
 
 /**
  * HTML pages from view models. Pure string building: no data access here (ADR 0002 keeps the
@@ -141,6 +143,80 @@ export function renderHealth(h: DataHealth, ctx: PageContext): string {
   return page("Data health", "/health", ctx, body);
 }
 
+/** Bars per list on the Projects and models page; the rest fold into one "Other" bar. */
+const TOP_BARS = 8;
+
+export function renderProjects(p: ProjectsPage, ctx: PageContext): string {
+  const body = p.providers.length
+    ? p.providers.map((prov) => projectsSection(prov.provider, prov.cycles, ctx)).join("")
+    : `<p class="empty">No token data yet. Read the Claude Code and Codex logs with <code>bun run backfill:tokens</code> (rerun anytime, it reads only new lines).</p>`;
+  return page(
+    "Projects and models",
+    "/projects",
+    ctx,
+    `<h1>Projects and models</h1>
+  <p class="lede">Share of each Cycle's tokens per Project (a git repository, worktrees included) and per model. Tokens are counted from the logs, input, cache and output together; they are not a share of the allowance.</p>
+  ${body}`,
+  );
+}
+
+function projectsSection(provider: string, cycles: readonly CycleTokens[], ctx: PageContext): string {
+  const name = providerName(provider);
+  return `
+  <section class="provider">
+    <header class="provider-head"><h2>${e(name)}</h2><span class="meta">Last ${cycles.length} Cycle${cycles.length === 1 ? "" : "s"} with tokens, newest first</span></header>
+    ${cycles
+      .map((c) => {
+        const span = `${formatTime(c.from, ctx, "date")} to ${formatTime(c.to, ctx, "date")}`;
+        const notes = [
+          c.running && "running",
+          c.inferred && `<span class="flag" title="No Snapshot recorded this Reset: dates stepped in Cycle lengths from one that was">dates inferred</span>`,
+        ].filter(Boolean);
+        return `
+    <div class="cycle-tokens">
+      <h3>${e(c.label)}, ${e(span)} <span class="meta">${e(formatTokens(c.total))} tokens${notes.length ? `, ${notes.join(", ")}` : ""}</span></h3>
+      <div class="share-cols">
+        ${shareBars("Projects", "Project", c.byProject, `${name} ${span}`)}
+        ${shareBars("Models", "Model", c.byModel, `${name} ${span}`)}
+      </div>
+    </div>`;
+      })
+      .join("")}
+  </section>`;
+}
+
+/**
+ * Ranked shares as single-hue bars (length is the share, text in ink, a tip per bar), then the
+ * full list as a table.
+ */
+function shareBars(title: string, column: string, shares: readonly Share[], context: string): string {
+  const top = shares.slice(0, TOP_BARS);
+  const rest = shares.slice(TOP_BARS);
+  const rows = rest.length
+    ? [
+        ...top,
+        {
+          name: `Other (${rest.length})`,
+          tokens: rest.reduce((sum, s) => sum + s.tokens, 0),
+          share: rest.reduce((sum, s) => sum + s.share, 0),
+        },
+      ]
+    : top;
+  return `<div class="shares"><h4>${e(title)}</h4><ul class="bars" aria-label="${e(`${title}, ${context}`)}">${rows
+    .map((s) => {
+      const tip = e(`${s.name}: ${percent(s.share)} of tokens (${formatTokens(s.tokens)})`);
+      return `<li class="bar-row" tabindex="0" data-tip="${tip}" aria-label="${tip}"><span class="bar-name">${e(s.name)}</span><span class="bar-track"><span class="bar" style="width:${pctOf(Math.max(s.share, 0.004))}"></span></span><span class="bar-val">${percent(s.share)}</span></li>`;
+    })
+    .join("")}</ul>${table(
+    [column, "Tokens", "Share"],
+    shares.map((s) => [s.name, formatTokens(s.tokens), percent(s.share)]),
+  )}</div>`;
+}
+
+function percent(share: number): string {
+  return share > 0 && share < 0.005 ? "<1%" : `${Math.round(share * 100)}%`;
+}
+
 export function renderMessage(title: string, message: string, ctx: PageContext): string {
   return page(title, "", ctx, `<h1>${e(title)}</h1><p class="lede">${e(message)}</p>`);
 }
@@ -262,6 +338,7 @@ function page(title: string, path: string, ctx: PageContext, body: string): stri
   const nav = [
     link("/", "Overview"),
     ...ctx.providers.map((p) => link(`/provider/${encodeURIComponent(p)}`, providerName(p))),
+    link("/projects", "Projects and models"),
     link("/health", "Data health"),
   ].join("");
   return `<!doctype html>
@@ -428,6 +505,19 @@ g.faint, .dot.faint { opacity: .4; }
 .gap { fill: url(#gaphatch); outline: none; }
 .gaphatch-bg { fill: var(--gap-ink); fill-opacity: .18; } .gaphatch-line { stroke: var(--muted); stroke-width: 1.5; stroke-opacity: .6; }
 .gap:focus-visible, .gap:hover { opacity: .7; }
+.cycle-tokens { border-top: 1px solid var(--grid); padding: 14px 0 6px; }
+.cycle-tokens:first-of-type { border-top: 0; padding-top: 0; }
+.cycle-tokens h3 { font-size: 15px; font-weight: 600; margin: 0 0 10px; }
+.cycle-tokens h3 .meta { font-weight: 400; margin-left: 6px; }
+.share-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px 32px; }
+.shares h4 { font-size: 13px; font-weight: 600; color: var(--ink-2); margin: 0 0 6px; }
+.bars { list-style: none; margin: 0; padding: 0; }
+.bar-row { display: grid; grid-template-columns: minmax(80px, 38%) 1fr 40px; align-items: center; gap: 10px; padding: 3px 4px; border-radius: 4px; font-size: 13px; outline: none; }
+.bar-row:hover, .bar-row:focus-visible { background: var(--hair); }
+.bar-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.bar-track { position: relative; height: 10px; }
+.bar { position: absolute; left: 0; top: 0; bottom: 0; background: var(--s1); border-radius: 0 4px 4px 0; min-width: 2px; }
+.bar-val { text-align: right; color: var(--ink); font-variant-numeric: tabular-nums; }
 details.table { margin-top: 10px; font-size: 13px; }
 details.table summary { color: var(--ink-2); cursor: pointer; width: max-content; }
 .scroll { overflow-x: auto; }

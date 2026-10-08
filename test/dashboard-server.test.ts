@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { loadDashboardData } from "../src/dashboard/data.ts";
 import { dashboardHandler } from "../src/dashboard/server.ts";
 import { openStore } from "../src/store.ts";
-import { NOW, reading, stored, SYNTHETIC_GAPS, syntheticReadings } from "./dashboard-fixtures.ts";
+import { NOW, reading, stored, SYNTHETIC_GAPS, syntheticReadings, tokenEvent } from "./dashboard-fixtures.ts";
 
 // Handlers over a real store in a temp data directory, seeded with synthetic readings.
 let dataDir: string;
@@ -74,6 +74,38 @@ describe("pages", () => {
     // Time without readings is shown as unknown next to Idle Capacity, never as idle.
     expect(res.body).toContain("unknown (no readings) 91%");
     expect(res.body).toContain("<td>4d 2h</td>");
+  });
+
+  test("Projects and models shows token share per Cycle by folder name, never full paths", async () => {
+    seed();
+    const store = openStore(dbPath);
+    store.saveTokenEvents([
+      { key: "a", ...tokenEvent("codex", "2026-10-03T10:00:00.000Z", "/private/place/alpha", "gpt-5.5", 300) },
+      { key: "b", ...tokenEvent("codex", "2026-10-03T11:00:00.000Z", null, "gpt-6-astra", 100) },
+    ]);
+    store.close();
+
+    const res = await get("/projects");
+    expect(res.status).toBe(200);
+    expect(res.body).toContain("Projects and models");
+    expect(res.body).toContain("alpha");
+    expect(res.body).toContain("(other)");
+    expect(res.body).toContain("gpt-6-astra");
+    expect(res.body).toContain("75%");
+    expect(res.body).toContain('href="/projects" aria-current="page"');
+    expect(res.body).not.toContain("/private/place");
+
+    const api = await get("/api/projects");
+    expect(api.type).toContain("application/json");
+    expect(JSON.parse(api.body).providers[0].cycles[0].byProject[0]).toEqual({ name: "alpha", tokens: 300, share: 0.75 });
+    expect(api.body).not.toContain("/private/place");
+  });
+
+  test("Projects and models without token data says how to read the logs", async () => {
+    seed();
+    const res = await get("/projects");
+    expect(res.status).toBe(200);
+    expect(res.body).toContain("bun run backfill:tokens");
   });
 
   test("an unknown Provider is a 404 page", async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { formatSessions, formatSummary } from "../src/summary.ts";
+import { formatSessions, formatSummary, formatTokenShares } from "../src/summary.ts";
 import { deriveWindows, type Reading, type Window } from "../src/window-model.ts";
 
 function cycle(provider: string, endedAt: string | null, waste: Window["waste"], over: Partial<Window> = {}): Window {
@@ -96,5 +96,52 @@ describe("Sessions section", () => {
 
   test("is empty when no Session line was recorded", () => {
     expect(formatSessions([], now)).toBe("");
+  });
+});
+
+describe("formatTokenShares", () => {
+  const share = (name: string, tokens: number, s: number) => ({ name, tokens, share: s });
+  const span = (from: string, to: string, running: boolean, inferred: boolean) => ({ provider: "claude", label: "Weekly", from, to, running, inferred });
+
+  test("lists the last two Cycles per Provider with token share per Project and model", () => {
+    const out = formatTokenShares(
+      [
+        {
+          ...span("2026-09-21T00:00:00.000Z", "2026-09-28T00:00:00.000Z", false, true),
+          total: 50,
+          byProject: [share("old", 50, 1)],
+          byModel: [share("claude-opus-5", 50, 1)],
+        },
+        {
+          ...span("2026-09-28T00:00:00.000Z", "2026-10-05T00:00:00.000Z", false, true),
+          total: 1_250_000,
+          byProject: [share("alpha", 1_000_000, 0.8), share("(other)", 250_000, 0.2)],
+          byModel: [share("claude-opus-5", 1_250_000, 1)],
+        },
+        {
+          ...span("2026-10-05T00:00:00.000Z", "2026-10-12T00:00:00.000Z", true, false),
+          total: 7_000,
+          byProject: [1, 2, 3, 4, 5, 6, 7].map((i) => share(`p${i}`, 1000, 1 / 7)),
+          byModel: [share("claude-sonnet-5", 7_000, 1)],
+        },
+      ],
+      { timeZone: "UTC" },
+    );
+    expect(out).toBe(
+      [
+        "Projects and models (token share per Cycle)",
+        "claude",
+        "  Weekly  2026-09-28 00:00 to 2026-10-05 00:00  1.3M tokens  Cycle inferred",
+        "    Projects  alpha 80%, (other) 20%",
+        "    Models    claude-opus-5 100%",
+        "  Weekly  2026-10-05 00:00 to 2026-10-12 00:00  7k tokens  running",
+        "    Projects  p1 14%, p2 14%, p3 14%, p4 14%, p5 14%, 2 more 29%",
+        "    Models    claude-sonnet-5 100%",
+      ].join("\n"),
+    );
+  });
+
+  test("is empty without token data", () => {
+    expect(formatTokenShares([])).toBe("");
   });
 });

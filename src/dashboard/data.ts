@@ -9,6 +9,7 @@ export function loadDashboardData(dbPath: string): DashboardData {
       readings: store.readingsWithRole(["session", "cycle", "overage", "submeter", "ignored", "unclassified"]),
       latest: store.latestReadings(),
       gaps: store.allGaps(),
+      tokens: store.tokenUsage(),
     };
   } finally {
     store.close();

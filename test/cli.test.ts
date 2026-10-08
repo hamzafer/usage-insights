@@ -181,3 +181,54 @@ describe("backfill:codex", () => {
     expect(out.out).toContain("0 log files");
   });
 });
+
+describe("backfill:tokens", () => {
+  test("reads Claude and Codex logs so summary shows token share per Project and model, and reruns add nothing", () => {
+    // Synthetic logs: one Claude response written as two lines in a repository, one Codex call outside any.
+    const repo = join(dataDir, "code", "alpha");
+    mkdirSync(join(repo, ".git"), { recursive: true });
+    const claudeDir = join(dataDir, "claude-projects");
+    mkdirSync(join(claudeDir, "-code-alpha"), { recursive: true });
+    const line = JSON.stringify({
+      type: "assistant",
+      timestamp: "2026-10-06T10:00:00.000Z",
+      requestId: "req_FAKE",
+      message: { id: "msg_FAKE", model: "claude-opus-5", usage: { input_tokens: 100, output_tokens: 200, cache_creation_input_tokens: 0, cache_read_input_tokens: 700 } },
+      cwd: join(repo, "src"),
+    });
+    writeFileSync(join(claudeDir, "-code-alpha", "s1.jsonl"), `${line}\n${line}\n`);
+    const codexDir = join(dataDir, "codex-sessions");
+    mkdirSync(join(codexDir, "2026", "10", "06"), { recursive: true });
+    writeFileSync(
+      join(codexDir, "2026", "10", "06", "rollout-2026-10-06T12-00-00-synthetic.jsonl"),
+      [
+        { timestamp: "2026-10-06T10:00:00.000Z", type: "session_meta", payload: { cwd: join(dataDir, "scratch") } },
+        { timestamp: "2026-10-06T10:00:01.000Z", type: "turn_context", payload: { cwd: join(dataDir, "scratch"), model: "gpt-5.5" } },
+        {
+          timestamp: "2026-10-06T10:00:02.000Z",
+          type: "event_msg",
+          payload: { type: "token_count", info: { total_token_usage: { total_tokens: 500 }, last_token_usage: { input_tokens: 400, cached_input_tokens: 0, output_tokens: 100 } } },
+        },
+      ].map((l) => `${JSON.stringify(l)}\n`).join(""),
+    );
+    const env = {
+      USAGE_INSIGHTS_CLAUDE_DIR: claudeDir,
+      USAGE_INSIGHTS_CLAUDE_WORK_DIR: join(dataDir, "missing"),
+      USAGE_INSIGHTS_CODEX_DIR: codexDir,
+      TZ: "UTC",
+    };
+
+    const first = run("src/cli/backfill-tokens.ts", deadUrl, env);
+    expect(first.code).toBe(0);
+    expect(first.out).toContain("2 log files, 5 new lines, 2 API calls stored");
+    expect(run("src/cli/backfill-tokens.ts", deadUrl, env).out).toContain("2 log files, 0 new lines, 0 API calls stored");
+
+    const summary = run("src/cli/summary.ts", deadUrl, env);
+    expect(summary.out).toContain("Projects and models (token share per Cycle)\nclaude\n");
+    expect(summary.out).toContain("1k tokens");
+    expect(summary.out).toContain("    Projects  alpha 100%\n    Models    claude-opus-5 100%\n");
+    expect(summary.out).toContain("codex\n");
+    expect(summary.out).toContain("    Projects  (other) 100%\n    Models    gpt-5.5 100%");
+    expect(summary.out).not.toContain(dataDir);
+  });
+});

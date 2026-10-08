@@ -10,6 +10,8 @@ export interface Config {
   dashboardPort: number;
   /** Codex CLI session logs, read by the Codex Backfill. */
   codexSessionsDir: string;
+  /** Claude Code `projects` directories per Provider (personal and work account), read by the token Backfill. */
+  claudeProjectDirs: { provider: string; dir: string }[];
 }
 
 export const DEFAULT_DASHBOARD_PORT = 6740;
@@ -22,6 +24,8 @@ export const DEFAULT_OPENUSAGE_URL = "http://127.0.0.1:6736/v1/usage";
  * - USAGE_INSIGHTS_OPENUSAGE_URL (default `http://127.0.0.1:6736/v1/usage`)
  * - USAGE_INSIGHTS_PORT (default 6740): the dashboard's port
  * - USAGE_INSIGHTS_CODEX_DIR (default `~/.codex/sessions`)
+ * - USAGE_INSIGHTS_CLAUDE_DIR (default `~/.claude/projects`): Provider `claude`
+ * - USAGE_INSIGHTS_CLAUDE_WORK_DIR (default `~/.claude-work/projects`): Provider `claude-work`
  */
 export function loadConfig(
   env: Record<string, string | undefined> = process.env,
@@ -35,6 +39,10 @@ export function loadConfig(
     openUsageUrl: env.USAGE_INSIGHTS_OPENUSAGE_URL || DEFAULT_OPENUSAGE_URL,
     dashboardPort: port(env.USAGE_INSIGHTS_PORT),
     codexSessionsDir: env.USAGE_INSIGHTS_CODEX_DIR || join(home, ".codex", "sessions"),
+    claudeProjectDirs: [
+      { provider: "claude", dir: env.USAGE_INSIGHTS_CLAUDE_DIR || join(home, ".claude", "projects") },
+      { provider: "claude-work", dir: env.USAGE_INSIGHTS_CLAUDE_WORK_DIR || join(home, ".claude-work", "projects") },
+    ],
   };
 }
 

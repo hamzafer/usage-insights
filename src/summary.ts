@@ -1,4 +1,5 @@
 import { idleCapacity, type IdleCapacityOptions } from "./sessions.ts";
+import type { CycleTokens, Share } from "./token-shares.ts";
 import type { Waste, Window } from "./window-model.ts";
 
 export interface SummaryOptions {
@@ -86,6 +87,53 @@ export function formatSessions(windows: readonly Window[], now: string | Date, o
     }
   }
   return out.join("\n");
+}
+
+/** How many Cycles per Provider the token section lists, newest last. */
+export const SUMMARY_TOKEN_CYCLES = 2;
+/** Projects and models named per line; the rest are summed as "N more". */
+export const SUMMARY_TOP_SHARES = 5;
+
+/**
+ * Plain-text Projects and models section (`bun run summary`): the last Cycles per Provider with
+ * their token share per Project and per model. Empty without token data.
+ */
+export function formatTokenShares(cycles: readonly CycleTokens[], options: SummaryOptions = {}): string {
+  if (cycles.length === 0) return "";
+  const time = minuteFormat(options.timeZone);
+  const out = ["Projects and models (token share per Cycle)"];
+  for (const [provider, own] of Map.groupBy(cycles, (c) => c.provider)) {
+    out.push(provider);
+    for (const c of own.slice(-SUMMARY_TOKEN_CYCLES)) {
+      const span = `${time.format(new Date(c.from))} to ${time.format(new Date(c.to))}`;
+      const notes = [c.running && "running", c.inferred && "Cycle inferred"].filter(Boolean).join(", ");
+      out.push(`  ${[c.label, span, `${formatTokens(c.total)} tokens`, notes].filter(Boolean).join("  ")}`);
+      out.push(`    Projects  ${formatShares(c.byProject)}`);
+      out.push(`    Models    ${formatShares(c.byModel)}`);
+    }
+  }
+  return out.join("\n");
+}
+
+function formatShares(shares: readonly Share[]): string {
+  const percent = (s: number) => `${Math.round(s * 100)}%`;
+  const named = shares.slice(0, SUMMARY_TOP_SHARES).map((s) => `${s.name} ${percent(s.share)}`);
+  const rest = shares.slice(SUMMARY_TOP_SHARES);
+  if (rest.length) named.push(`${rest.length} more ${percent(rest.reduce((sum, s) => sum + s.share, 0))}`);
+  return named.join(", ");
+}
+
+/** 400, 7k, 1.3M, 2.1B. */
+export function formatTokens(n: number): string {
+  const units: [number, string][] = [
+    [1e9, "B"],
+    [1e6, "M"],
+    [1e3, "k"],
+  ];
+  for (const [size, suffix] of units) {
+    if (n >= size) return `${Number((n / size).toFixed(n >= size * 10 ? 0 : 1))}${suffix}`;
+  }
+  return String(Math.round(n));
 }
 
 function minuteFormat(timeZone: string | undefined): Intl.DateTimeFormat {

@@ -19,6 +19,31 @@ export interface StoredReading {
   source?: string;
 }
 
+/**
+ * Tokens of one API call (spec §4) from Claude Code or Codex logs, with its Project and model.
+ * Counted from logs, not converted. `input` excludes cache reads and writes.
+ */
+export interface TokenEvent {
+  /** `claude`, `claude-work` or `codex`. */
+  provider: string;
+  at: string;
+  /**
+   * The Project's repository root; for a Codex session whose folder is gone, the repository name
+   * from its git remote; null for "(other)". Never shown in full (see projectName).
+   */
+  project: string | null;
+  model: string;
+  input: number;
+  cacheWrite: number;
+  cacheRead: number;
+  output: number;
+}
+
+/** A TokenEvent with the key it is deduplicated on (e.g. message and request id). */
+export interface KeyedTokenEvent extends TokenEvent {
+  key: string;
+}
+
 /** A recording run that got no Snapshot, and why (ADR 0001: gaps must be visible). */
 export interface Gap {
   recordedAt: string;
@@ -59,6 +84,20 @@ const MIGRATIONS: string[] = [
      offset      INTEGER NOT NULL,
      PRIMARY KEY (source, path)
    );`,
+  // Tokens per API call from Claude Code and Codex logs (ticket #7), deduplicated on `key`.
+  `CREATE TABLE token_events (
+     id          INTEGER PRIMARY KEY,
+     key         TEXT NOT NULL UNIQUE,
+     provider    TEXT NOT NULL,
+     at          TEXT NOT NULL,
+     project     TEXT,
+     model       TEXT NOT NULL,
+     input       INTEGER NOT NULL,
+     cache_write INTEGER NOT NULL,
+     cache_read  INTEGER NOT NULL,
+     output      INTEGER NOT NULL
+   );
+   CREATE INDEX token_events_by_time ON token_events (at);`,
 ];
 
 export interface Store {
@@ -79,6 +118,13 @@ export interface Store {
   /** Bytes of a log file a Backfill (`source`) has already read; 0 for a new file. */
   backfillOffset(source: string, path: string): number;
   saveBackfillOffset(source: string, path: string, offset: number): void;
+  /**
+   * Stores token events, one per key; a key seen again keeps its earliest time. Returns how many
+   * keys were new.
+   */
+  saveTokenEvents(events: KeyedTokenEvent[]): number;
+  /** Token events, oldest first; only those at or after `from` and before `to` when given. */
+  tokenUsage(range?: { from?: string; to?: string }): TokenEvent[];
   close(): void;
 }
 
@@ -98,8 +144,31 @@ export function openStore(path: string): Store {
     return added;
   });
 
+  const insertToken = db.prepare(
+    `INSERT OR IGNORE INTO token_events (key, provider, at, project, model, input, cache_write, cache_read, output)
+     VALUES ($key, $provider, $at, $project, $model, $input, $cacheWrite, $cacheRead, $output)`,
+  );
+  const keepEarliest = db.prepare("UPDATE token_events SET at = $at WHERE key = $key AND at > $at");
+  const saveTokens = db.transaction((events: KeyedTokenEvent[]) => {
+    let added = 0;
+    for (const e of events) {
+      const changes = insertToken.run({ ...e }).changes;
+      added += changes;
+      if (!changes) keepEarliest.run({ key: e.key, at: e.at });
+    }
+    return added;
+  });
+
   return {
     saveReadings: (readings) => insertMany(readings),
+    saveTokenEvents: (events) => saveTokens(events),
+    tokenUsage: ({ from = "", to = "￿" } = {}) =>
+      db
+        .query<TokenEvent, [string, string]>(
+          `SELECT provider, at, project, model, input, cache_write AS cacheWrite, cache_read AS cacheRead, output
+             FROM token_events WHERE at >= ? AND at < ? ORDER BY at, id`,
+        )
+        .all(from, to),
     saveGap: (gap) => {
       db.query("INSERT INTO gaps (recorded_at, reason) VALUES ($recordedAt, $reason)").run({ ...gap });
     },
