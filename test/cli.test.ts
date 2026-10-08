@@ -117,12 +117,15 @@ describe("summary", () => {
       { ...session, used: 60, resetsAt: "2026-01-05T15:00:00.000Z", fetchedAt: "2026-01-05T14:50:00.000Z" },
       { ...session, used: 0, resetsAt: null, fetchedAt: "2026-01-06T10:00:00.000Z" },
     ]);
+    // A recorder run that failed between the two readings around the Reset.
+    store.saveGap({ recordedAt: "2026-01-08T08:55:00.000Z", reason: "OpenUsage unreachable" });
     store.close();
 
     const summary = run("src/cli/summary.ts", deadUrl, { TZ: "UTC" });
     expect(summary.code).toBe(0);
     expect(summary.out).toContain("\n\nSessions\ncodex\n  Session  reset 2026-01-05 15:00  Waste  40%\n");
-    expect(summary.out).toContain("  Idle Capacity  Weekly  reset 2026-01-08 09:00  6d 19h  97%\n");
+    // Only the Session's 5 hours are known; the rest of the Cycle is unknown, not idle.
+    expect(summary.out).toContain("  Idle Capacity  Weekly  reset 2026-01-08 09:00  0m   0%  unknown 6d 19h\n");
   });
 
   test("with nothing recorded it says no Cycle has ended", () => {

@@ -71,6 +71,8 @@ export interface Store {
   readingsWithRole(roles: LineRole[]): Reading[];
   /** The newest gaps first. */
   recentGaps(limit: number): Gap[];
+  /** Every gap, oldest first (Idle Capacity treats the time around each as unknown). */
+  allGaps(): Gap[];
   countReadings(): number;
   /** The plan of the provider's newest live Snapshot (not a Backfill), or null. */
   livePlan(provider: string): string | null;
@@ -130,6 +132,10 @@ export function openStore(path: string): Store {
             ORDER BY recorded_at DESC, id DESC LIMIT ?`,
         )
         .all(limit),
+    allGaps: () =>
+      db
+        .query<Gap, []>("SELECT recorded_at AS recordedAt, reason FROM gaps ORDER BY recorded_at, id")
+        .all(),
     countReadings: () =>
       db.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM readings").get()?.n ?? 0,
     livePlan: (provider) =>
