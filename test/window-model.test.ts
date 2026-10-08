@@ -196,6 +196,28 @@ describe("Waste edge cases", () => {
     expect(window.endedAt).toBe("2026-10-08T09:00:00.000Z");
     expect(window.waste).toBeNull();
   });
+
+  test("usage past the limit is 0 Waste, never negative (that Window is a Limit Hit)", () => {
+    const windows = deriveWindows(
+      [
+        reading("2026-10-08T08:50:00.000Z", 104, "2026-10-08T09:00:00.000Z"),
+        reading("2026-10-08T09:10:00.000Z", 0, "2026-10-15T09:00:00.000Z"),
+      ],
+      NOW,
+    );
+    expect(windows[0]!.waste!.share).toBe(0);
+  });
+
+  test("negative usage (a bad reading) is at most 100% Waste", () => {
+    const windows = deriveWindows(
+      [
+        reading("2026-10-08T08:50:00.000Z", -5, "2026-10-08T09:00:00.000Z"),
+        reading("2026-10-08T09:10:00.000Z", 0, "2026-10-15T09:00:00.000Z"),
+      ],
+      NOW,
+    );
+    expect(windows[0]!.waste!.share).toBe(1);
+  });
 });
 
 describe("Session Waste", () => {

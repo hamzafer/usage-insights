@@ -139,7 +139,8 @@ function wasteAt(window: Reading[], endedAt: string): Waste | null {
   const last = window.findLast((r) => ms(r.fetchedAt) <= ms(endedAt)) ?? window[0]!;
   if (last.limit <= 0) return null;
   return {
-    share: (last.limit - last.used) / last.limit,
+    // Waste = 1 − used/limit, clamped to 0..1: usage past the limit is 0 Waste (and a Limit Hit).
+    share: Math.min(1, Math.max(0, (last.limit - last.used) / last.limit)),
     lastReadingAt: last.fetchedAt,
     lowConfidence: ms(endedAt) - ms(last.fetchedAt) > LOW_CONFIDENCE_GAP_MS,
     basis: last.source.startsWith("backfill:claude") ? "estimated" : "measured",
