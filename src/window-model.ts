@@ -17,6 +17,8 @@ export interface Reading {
   fetchedAt: string;
   /** `openusage`, `backfill:codex`, `backfill:claude`, ... */
   source: string;
+  /** The Window's length as reported (e.g. 7 days for a weekly Cycle), when known. */
+  periodMs?: number | null;
 }
 
 /** Measured comes from a Snapshot or a log that records the limit; Estimated is converted from tokens. */
