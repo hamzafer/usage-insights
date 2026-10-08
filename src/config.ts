@@ -12,6 +12,10 @@ export interface Config {
   codexSessionsDir: string;
   /** Claude Code `projects` directories per Provider (personal and work account), read by the token Backfill. */
   claudeProjectDirs: { provider: string; dir: string }[];
+  /** Claude model for Suggestions; undefined: the built-in default (src/report/anthropic-client.ts). */
+  suggestionsModel?: string;
+  /** Messages API endpoint for Suggestions; undefined: the Anthropic API. */
+  anthropicUrl?: string;
 }
 
 export const DEFAULT_DASHBOARD_PORT = 6740;
@@ -26,6 +30,9 @@ export const DEFAULT_OPENUSAGE_URL = "http://127.0.0.1:6736/v1/usage";
  * - USAGE_INSIGHTS_CODEX_DIR (default `~/.codex/sessions`)
  * - USAGE_INSIGHTS_CLAUDE_DIR (default `~/.claude/projects`): Provider `claude`
  * - USAGE_INSIGHTS_CLAUDE_WORK_DIR (default `~/.claude-work/projects`): Provider `claude-work`
+ * - USAGE_INSIGHTS_CLAUDE_MODEL: the Claude model for Suggestions
+ * - USAGE_INSIGHTS_ANTHROPIC_URL: the Messages API endpoint for Suggestions (tests)
+ * (The Anthropic API key is not configuration: Keychain, or ANTHROPIC_API_KEY; see src/report/anthropic-client.ts.)
  */
 export function loadConfig(
   env: Record<string, string | undefined> = process.env,
@@ -43,6 +50,8 @@ export function loadConfig(
       { provider: "claude", dir: env.USAGE_INSIGHTS_CLAUDE_DIR || join(home, ".claude", "projects") },
       { provider: "claude-work", dir: env.USAGE_INSIGHTS_CLAUDE_WORK_DIR || join(home, ".claude-work", "projects") },
     ],
+    suggestionsModel: env.USAGE_INSIGHTS_CLAUDE_MODEL || undefined,
+    anthropicUrl: env.USAGE_INSIGHTS_ANTHROPIC_URL || undefined,
   };
 }
 

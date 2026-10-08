@@ -27,7 +27,7 @@ export interface ReportDeps {
   print: (text: string) => void;
   /** Progress and problems (the launchd log). Never given secrets. */
   log: (line: string) => void;
-  /** EXTENSION POINT (ticket #10): Claude-written Suggestions. */
+  /** Claude-written Suggestions; none (no section) when omitted. */
   suggestions?: SuggestionsProvider;
   timeZone?: string;
   dashboardUrl?: string;

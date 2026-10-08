@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openStore } from "../src/store.ts";
@@ -34,6 +34,9 @@ function run(...args: string[]) {
     USAGE_INSIGHTS_CLAUDE_WORK_DIR: join(dataDir, "no-claude-work"),
     TELEGRAM_STATE_DIR: join(dataDir, "telegram"),
     TZ: "UTC",
+    // Claude is never reached: a test key and a closed local port.
+    ANTHROPIC_API_KEY: "test-key",
+    USAGE_INSIGHTS_ANTHROPIC_URL: "http://127.0.0.1:9/v1/messages",
   };
   delete env.TELEGRAM_BOT_TOKEN;
   delete env.USAGE_INSIGHTS_TELEGRAM_CHAT_ID;
@@ -60,4 +63,26 @@ test("without Telegram config the Report is saved, and the run fails naming the 
 
 test("an unknown option is refused", () => {
   expect(run("--send-now").code).toBe(64);
+});
+
+test("a missing Setup file is drafted, and a failed Claude call still lets the Report out", () => {
+  const out = run("--dry-run");
+  expect(out.code).toBe(0);
+  expect(out.out).toContain("Setup is a DRAFT");
+  expect(out.out).toContain("Suggestions unavailable: Claude API unreachable");
+  expect(out.out).toContain("## Numbers");
+  expect(out.out).not.toContain("test-key");
+  expect(readFileSync(join(dataDir, "setup.md"), "utf8").split("\n")[0]).toContain("DRAFT");
+});
+
+test("setup:draft writes the DRAFT template once and never overwrites", () => {
+  const env = { ...process.env, USAGE_INSIGHTS_DATA_DIR: dataDir };
+  const first = Bun.spawnSync(["bun", "run", "src/cli/setup-draft.ts"], { cwd: root, env });
+  expect(first.exitCode).toBe(0);
+  expect(first.stdout.toString()).toContain("Drafted");
+  writeFileSync(join(dataDir, "setup.md"), "# Mine\n");
+  const second = Bun.spawnSync(["bun", "run", "src/cli/setup-draft.ts"], { cwd: root, env });
+  expect(second.exitCode).toBe(0);
+  expect(second.stdout.toString()).toContain("already exists");
+  expect(readFileSync(join(dataDir, "setup.md"), "utf8")).toBe("# Mine\n");
 });

@@ -10,6 +10,7 @@
     "summary": "bun run src/cli/summary.ts",
     "dashboard": "bun run src/cli/dashboard.ts",
     "report": "bun run src/cli/report.ts",
+    "setup:draft": "bun run src/cli/setup-draft.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

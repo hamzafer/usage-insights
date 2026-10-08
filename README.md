@@ -102,6 +102,25 @@ send time from its state directory and never copied into the repo, plists or log
 
 Only `sendMessage` is called (the plugin owns `getUpdates`).
 
+### Suggestions and the Setup file
+
+The Report ends with up to 3 Suggestions written by Claude (Sonnet 5.5) from the week's numbers
+and your Setup file, `setup.md` in the data directory (see `docs/setup.example.md`). Only the
+numbers section is sent: no log content, Projects by folder name only. If the call fails, the
+Report still goes out with "Suggestions unavailable: <reason>".
+
+```sh
+bun run setup:draft   # write a DRAFT setup.md if there is none (the Report does this too)
+```
+
+Reports say "Setup is a DRAFT" until you remove DRAFT from the file's first line.
+
+| Variable | Default |
+|---|---|
+| `ANTHROPIC_API_KEY` | Keychain item `anthropic-api-key-personal` (read at call time, never logged) |
+| `USAGE_INSIGHTS_CLAUDE_MODEL` | `claude-sonnet-5-5` |
+| `USAGE_INSIGHTS_ANTHROPIC_URL` | `https://api.anthropic.com/v1/messages` |
+
 Install it to run Mondays at 09:00 local time (a run missed while the Mac slept happens on wake):
 
 ```sh
