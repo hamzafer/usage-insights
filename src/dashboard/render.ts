@@ -1,6 +1,7 @@
 import { HATCH_DEFS, idleColumns, seriesSlot, sessionDots, wasteColumns } from "./charts.ts";
 import { escapeHtml as e, formatAmount, formatDuration, formatShare, formatTime, type FormatOptions } from "./format.ts";
 import { formatTokens } from "../summary.ts";
+import { providerName } from "../names.ts";
 import { MIN_CALIBRATION_MOVEMENT, MIN_CALIBRATION_SAMPLES } from "../calibration.ts";
 import type { CycleTokens, Share } from "../token-shares.ts";
 import { type DataHealth, type ProjectsPage, type ProviderHistory, type ProviderOverview, type RunningCycle, SNAPSHOT_GAP_MS } from "./view-model.ts";
@@ -14,18 +15,6 @@ export interface PageContext extends FormatOptions {
   /** Providers for the navigation. */
   providers: readonly string[];
   now: string;
-}
-
-const NAMES: Record<string, string> = {
-  claude: "Claude",
-  "claude-work": "Claude (Work)",
-  codex: "Codex",
-  cursor: "Cursor",
-  copilot: "Copilot",
-};
-
-export function providerName(id: string): string {
-  return NAMES[id] ?? id;
 }
 
 export function renderOverview(providers: readonly ProviderOverview[], health: DataHealth, ctx: PageContext): string {

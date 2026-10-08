@@ -80,7 +80,7 @@ scripts/uninstall-launchd.sh
 
 ```sh
 bun run report             # Backfills, then build, save and send the Report
-bun run report --dry-run   # print the message and the full Report; send and save nothing
+bun run report --dry-run   # print the card (HTML) and the full Report; send and save nothing
 bun run report --test      # prefix the message with "[TEST] "
 ```
 
@@ -88,8 +88,27 @@ A run first runs the Codex and token Backfills (a failure is logged and noted in
 then builds the Report for the 7 days before now: final Waste of every Cycle that reset, Pace of
 running Cycles, Limit Hits and Blocked Time, Overage, top Projects and models, the trend vs the
 previous 4 weeks, and time without readings (shown as unknown, never as zero). The full Report is
-saved as `reports/YYYY-MM-DD.md` in the data directory; a short plain-text message goes to
-Telegram. If building fails, the message is "Usage Insights Report failed: <reason>".
+saved as `reports/YYYY-MM-DD.md` in the data directory; a compact card goes to Telegram (HTML
+parse mode, under 4096 characters). If building fails, the message is "Usage Insights Report
+failed: <reason>".
+
+The card has four parts: **▶ Running now** (one line per running Cycle, worst first), **✅ Last
+week** (Cycles that reset, Limit Hits and Overage), **💡 Suggestions** (each cut to about 140
+characters; the Markdown keeps them whole) and **▸ Details** in an expandable quote (top Projects
+and models, token trend, and either "Week N of recording" for the first 4 weeks or the time
+without readings). Providers and models show display names ("Claude (Work)", "Opus 5.5").
+
+Status dots in Running now:
+
+| Dot | Rule |
+|---|---|
+| 🟢 | heading for under 30% Waste, or on pace to max out in the last 10% of the Cycle (using it all) |
+| 🟡 | heading for 30–70% Waste, or on pace to max out with 10–30% of the Cycle left |
+| 🔴 | heading for over 70% Waste, or on pace to max out with over 30% of the Cycle left |
+| ⚪ | no rate yet (needs more readings) |
+
+Pace is anchored at the Cycle's start (usage 0 at the Reset minus the Window length) when the
+length is known, so one late spike does not project a Limit Hit tomorrow.
 
 Telegram reuses the bot of the Claude Code Telegram plugin. The token and chat id are read at
 send time from its state directory and never copied into the repo, plists or logs:

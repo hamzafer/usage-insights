@@ -80,8 +80,8 @@ test("token_count rate limits become Session and Weekly readings with a backfill
   expect(result.stored).toBe(2);
   const base = { provider: "codex", limit: 100, fetchedAt: "2026-10-08T10:00:05.000Z", source: "backfill:codex" };
   expect(store.readingsWithRole(["session", "cycle"])).toEqual([
-    { ...base, label: "Session", role: "session", used: 12, resetsAt: "2026-10-08T14:00:00.000Z" },
-    { ...base, label: "Weekly", role: "cycle", used: 34, resetsAt: "2026-10-12T00:00:00.000Z" },
+    { ...base, label: "Session", role: "session", used: 12, resetsAt: "2026-10-08T14:00:00.000Z", periodMs: 18_000_000 },
+    { ...base, label: "Weekly", role: "cycle", used: 34, resetsAt: "2026-10-12T00:00:00.000Z", periodMs: 604_800_000 },
   ]);
 });
 

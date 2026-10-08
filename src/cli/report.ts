@@ -1,5 +1,5 @@
 // Weekly Report (`bun run report [--dry-run] [--test]`): refreshes data with the incremental
-// Backfills, saves the full Report to <data dir>/reports/YYYY-MM-DD.md and sends a short message
+// Backfills, saves the full Report to <data dir>/reports/YYYY-MM-DD.md and sends a compact HTML card
 // to Telegram, with up to 3 Suggestions from Claude (src/report/claude-suggestions.ts). launchd runs
 // it Mondays at 09:00 (scripts/install-report-launchd.sh). A missing setup.md is drafted, even on
 // --dry-run.

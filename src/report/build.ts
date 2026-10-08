@@ -91,7 +91,12 @@ export interface Report {
     blockedMs: WeekTrend;
     tokens: WeekTrend;
   };
-  coverage: { providers: ProviderCoverage[]; recorderGaps: number };
+  coverage: {
+    providers: ProviderCoverage[];
+    recorderGaps: number;
+    /** The first live Snapshot (else the first reading at all); null without readings. */
+    recordingSince: string | null;
+  };
   dataNotes: string[];
 }
 
@@ -147,6 +152,7 @@ export function buildReport(input: ReportInput): Report {
     coverage: {
       providers: coverage(input.readings, input.gaps, fromMs, toMs),
       recorderGaps: input.gaps.filter((g) => ms(g.recordedAt) >= fromMs && ms(g.recordedAt) < toMs).length,
+      recordingSince: recordingSince(input.readings),
     },
     dataNotes: [...(input.dataNotes ?? [])],
   };
@@ -258,6 +264,13 @@ function coverage(readings: readonly Reading[], gaps: readonly GapMarker[], from
         unknownMs: to - from - covered,
       };
     });
+}
+
+/** Backfills reach back further than the Recorder: the first live Snapshot is when recording began. */
+function recordingSince(readings: readonly Reading[]): string | null {
+  const live = readings.filter((r) => r.source === "openusage");
+  const times = (live.length ? live : readings).map((r) => ms(r.fetchedAt));
+  return times.length ? iso(Math.min(...times)) : null;
 }
 
 function average(values: readonly number[]): number | null {

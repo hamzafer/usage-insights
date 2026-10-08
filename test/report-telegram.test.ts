@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadTelegramCredentials, TELEGRAM_TEXT_LIMIT, TelegramMessenger } from "../src/report/telegram.ts";
+import { fitTelegram, loadTelegramCredentials, TELEGRAM_TEXT_LIMIT, TelegramMessenger } from "../src/report/telegram.ts";
 
 // Fake values only, never real ones.
 const TOKEN = "123456:FAKE";
@@ -41,7 +41,7 @@ test("a missing token or chat id names the file and key, never a value", () => {
   expect(() => loadTelegramCredentials({ TELEGRAM_STATE_DIR: dir }, "/nowhere")).toThrow(/allowFrom.*access\.json/);
 });
 
-test("sends one sendMessage call with the chat id and plain text", async () => {
+test("sends one sendMessage call with the chat id and the HTML text", async () => {
   const calls: { url: string; body: unknown }[] = [];
   const messenger = new TelegramMessenger(
     () => ({ token: TOKEN, chatId: "1" }),
@@ -54,7 +54,7 @@ test("sends one sendMessage call with the chat id and plain text", async () => {
   expect(calls).toEqual([
     {
       url: `https://api.telegram.org/bot${TOKEN}/sendMessage`,
-      body: { chat_id: "1", text: "hello", disable_web_page_preview: true },
+      body: { chat_id: "1", text: "hello", parse_mode: "HTML", disable_web_page_preview: true },
     },
   ]);
 });
@@ -91,4 +91,13 @@ test("text over Telegram's 4096-character cap is cut, not rejected", async () =>
   expect(TELEGRAM_TEXT_LIMIT).toBe(4096);
   expect(sent[0]!.length).toBeLessThanOrEqual(4096);
   expect(sent[0]!.endsWith("(cut)")).toBe(true);
+});
+
+test("cutting HTML keeps it valid: whole lines only, open tags closed", () => {
+  const text = `<b>Head</b>\n<blockquote expandable>${"line &amp; more\n".repeat(400)}</blockquote>`;
+  const cut = fitTelegram(text);
+  expect(cut.length).toBeLessThanOrEqual(TELEGRAM_TEXT_LIMIT);
+  expect(cut).toEndWith("(cut)</blockquote>");
+  expect(cut).not.toContain("&amp\n");
+  expect(fitTelegram("<b>short</b>")).toBe("<b>short</b>");
 });

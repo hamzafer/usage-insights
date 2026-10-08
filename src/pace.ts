@@ -2,7 +2,12 @@ import type { Basis, Window } from "./window-model.ts";
 
 /**
  * Pace (spec §3): the Waste a running Cycle is heading for at its Reset, if usage continues at the
- * rate seen in the Cycle's readings so far. Linear projection, pure functions, no I/O.
+ * rate seen so far. Linear projection, pure functions, no I/O.
+ *
+ * When the Window length is known (the reading's `periodMs`), the rate runs from the Cycle's start
+ * (its Reset minus the length, usage 0) to the newest reading, so one late spike between two
+ * readings cannot say "limit tomorrow". Without a length, the rate runs between the Cycle's first
+ * and newest readings.
  */
 export interface Pace {
   provider: string;
@@ -10,6 +15,10 @@ export interface Pace {
   resetsAt: string | null;
   /** The newest reading the projection starts from. */
   lastReadingAt: string;
+  /** Share of the allowance used at the newest reading, 0..1 (0 when the limit is unknown). */
+  usedShare: number;
+  /** The Cycle's length, when reported; Pace is then anchored at the Cycle's start. */
+  periodMs: number | null;
   /** Projected share of the allowance used at the Reset, 0..1; null without a rate yet. */
   projectedShare: number | null;
   /** Projected Waste at the Reset, 0..1; null without a rate yet. */
@@ -19,25 +28,32 @@ export interface Pace {
   basis: Basis;
 }
 
-/** Pace for every running Cycle. A rate needs two readings at different times and a known Reset. */
+/** Pace for every running Cycle. A rate needs a known Reset and either a Window length or two readings. */
 export function paceOfRunningCycles(windows: readonly Window[]): Pace[] {
   return windows
     .filter((w) => w.role === "cycle" && !w.endedAt)
     .map((w) => {
       const first = w.readings[0]!;
       const last = w.readings.at(-1)!;
+      const periodMs = w.readings.findLast((r) => r.periodMs)?.periodMs ?? null;
       const base = {
         provider: w.provider,
         label: w.label,
         resetsAt: w.resetsAt,
         lastReadingAt: last.fetchedAt,
+        usedShare: last.limit > 0 ? last.used / last.limit : 0,
+        periodMs,
         basis: (last.source.startsWith("backfill:claude") ? "estimated" : "measured") as Basis,
       };
-      const elapsed = ms(last.fetchedAt) - ms(first.fetchedAt);
-      if (!w.resetsAt || elapsed <= 0 || last.limit <= 0) {
-        return { ...base, projectedShare: null, expectedWaste: null, projectedLimitHitAt: null };
-      }
-      const growth = Math.max(0, last.used - first.used);
+      const none = { ...base, projectedShare: null, expectedWaste: null, projectedLimitHitAt: null };
+      if (!w.resetsAt || last.limit <= 0) return none;
+
+      const cycleStart = periodMs ? ms(w.resetsAt) - periodMs : null;
+      const anchored = cycleStart !== null && cycleStart < ms(last.fetchedAt);
+      const elapsed = anchored ? ms(last.fetchedAt) - cycleStart : ms(last.fetchedAt) - ms(first.fetchedAt);
+      const growth = anchored ? Math.max(0, last.used) : Math.max(0, last.used - first.used);
+      if (elapsed <= 0) return none;
+
       const remaining = Math.max(0, ms(w.resetsAt) - ms(last.fetchedAt));
       const projected = Math.min(last.limit, last.used + (growth * remaining) / elapsed);
       const toLimit = last.limit - last.used;

@@ -188,7 +188,7 @@ export function openStore(path: string): Store {
       db
         .query<Reading, string[]>(
           `SELECT provider, label, role, used, "limit", resets_at AS resetsAt,
-                  fetched_at AS fetchedAt, source
+                  fetched_at AS fetchedAt, source, period_ms AS periodMs
              FROM readings
             WHERE role IN (${roles.map(() => "?").join(", ")})
             ORDER BY provider, label, fetched_at, id`,

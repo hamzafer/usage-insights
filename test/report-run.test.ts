@@ -44,8 +44,8 @@ test("runs the Backfills first, saves the full Report and sends the short messag
   expect(saved.map((s) => s.file)).toEqual(["reports/2026-10-12.md"]);
   expect(saved[0]!.markdown).toContain("## Numbers");
   expect(messenger.sent).toHaveLength(1);
-  expect(messenger.sent[0]).toStartWith("Usage Insights Report\n");
-  expect(messenger.sent[0]).toContain("Full Report: reports/2026-10-12.md");
+  expect(messenger.sent[0]).toStartWith("<b>📊 Usage week · 5–12 Oct</b>\n");
+  expect(messenger.sent[0]).toContain("📄 Full Report: reports/2026-10-12.md");
 });
 
 test("a failed Backfill is logged and noted in the Report, which still goes out", async () => {
@@ -77,10 +77,20 @@ test("if building fails, a short failure message is sent instead", async () => {
   expect(messenger.sent).toEqual(["Usage Insights Report failed: database is locked"]);
 });
 
+test("the failure message is HTML-escaped (the card goes out in HTML parse mode)", async () => {
+  const { d, messenger } = deps({
+    load: () => {
+      throw new Error("bad <row> & more");
+    },
+  });
+  await runReport(d);
+  expect(messenger.sent).toEqual(["Usage Insights Report failed: bad &lt;row&gt; &amp; more"]);
+});
+
 test("--test prefixes the message with [TEST]", async () => {
   const { d, messenger } = deps({ test: true });
   await runReport(d);
-  expect(messenger.sent[0]).toStartWith("[TEST] Usage Insights Report\n");
+  expect(messenger.sent[0]).toStartWith("[TEST] <b>📊 Usage week · ");
 
   const failing = deps({ test: true, load: () => { throw new Error("boom"); } });
   await runReport(failing.d);
@@ -92,7 +102,7 @@ test("--dry-run prints the message and the Report, and sends and saves nothing",
   await runReport(d);
   expect(messenger.sent).toEqual([]);
   expect(saved).toEqual([]);
-  expect(printed[0]).toStartWith("Usage Insights Report\n");
+  expect(printed[0]).toStartWith("<b>📊 Usage week · 5–12 Oct</b>\n");
   expect(printed.join("\n")).toContain("## Numbers");
 });
 

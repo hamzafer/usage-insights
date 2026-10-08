@@ -51,7 +51,7 @@ test("readingsWithRole lists readings of the given roles with their source, olde
     { ...base, label: "Session", role: "session", used: 5, resetsAt: null, fetchedAt: "2026-01-05T10:00:00.000Z" },
   ]);
 
-  const weekly = { provider: "codex", label: "Weekly", role: "cycle" as const, limit: 100, resetsAt: "2026-01-09T08:00:00.000Z", source: "openusage" };
+  const weekly = { provider: "codex", label: "Weekly", role: "cycle" as const, limit: 100, resetsAt: "2026-01-09T08:00:00.000Z", source: "openusage", periodMs: null };
   expect(store.readingsWithRole(["cycle"])).toEqual([
     { ...weekly, used: 40, fetchedAt: "2026-01-05T10:00:00.000Z" },
     { ...weekly, used: 50, fetchedAt: "2026-01-06T10:00:00.000Z" },

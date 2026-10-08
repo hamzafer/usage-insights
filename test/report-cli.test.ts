@@ -47,8 +47,8 @@ function run(...args: string[]) {
 test("--dry-run --test prints the [TEST] message and the Report, saving nothing", () => {
   const out = run("--dry-run", "--test");
   expect(out.code).toBe(0);
-  expect(out.out).toContain("[TEST] Usage Insights Report\n");
-  expect(out.out).toContain("- codex Weekly: 25%");
+  expect(out.out).toContain("[TEST] <b>📊 Usage week · ");
+  expect(out.out).toContain("Codex reset 1× · 25% wasted");
   expect(out.out).toContain("## Numbers");
   expect(existsSync(join(dataDir, "reports"))).toBe(false);
 });
@@ -58,7 +58,7 @@ test("without Telegram config the Report is saved, and the run fails naming the 
   expect(out.code).toBe(1);
   expect(out.out).toContain("Report not delivered: Telegram bot token not found: no TELEGRAM_BOT_TOKEN in");
   const today = new Date().toISOString().slice(0, 10);
-  expect(readFileSync(join(dataDir, "reports", `${today}.md`), "utf8")).toContain("| codex | Weekly |");
+  expect(readFileSync(join(dataDir, "reports", `${today}.md`), "utf8")).toContain("| Codex | Weekly |");
 });
 
 test("an unknown option is refused", () => {
