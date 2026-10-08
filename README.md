@@ -83,6 +83,12 @@ Both jobs (Recorder and Report) come from one template, `launchd/job.plist.templ
 `scripts/launchd.sh install [--print] <recorder|report> <checkout>` (`uninstall <job>` removes one);
 the per-job scripts are thin wrappers around it.
 
+The jobs run with the settings you install them with: every `USAGE_INSIGHTS_*` variable and
+`TELEGRAM_STATE_DIR` set in your shell at install time is copied into the plist's
+`EnvironmentVariables` (reinstall after changing one). Secrets are never written there: anything
+named like a key, token, secret or password (and `ANTHROPIC_API_KEY`) is skipped; the Anthropic key
+is read from the Keychain and the Telegram token from the plugin's state at run time.
+
 ## Weekly Report (Telegram)
 
 ```sh

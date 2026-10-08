@@ -69,6 +69,23 @@ escape() {
   printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's/[|&\\]/\\&/g'
 }
 
+xml_escape() {
+  printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'
+}
+
+# The installer's USAGE_INSIGHTS_* settings and TELEGRAM_STATE_DIR, so the job runs with the same
+# configuration. Never secrets: anything named like a key, token, secret or password is skipped
+# (the Anthropic key comes from the Keychain and the Telegram token from the plugin, at run time).
+extra_env() {
+  local name
+  while IFS= read -r name; do
+    [[ "$name" == USAGE_INSIGHTS_* || "$name" == TELEGRAM_STATE_DIR ]] || continue
+    [[ "$name" == USAGE_INSIGHTS_DATA_DIR ]] && continue
+    [[ "$name" =~ (KEY|TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|AUTH) ]] && continue
+    printf '    <key>%s</key>\n    <string>%s</string>\n' "$name" "$(xml_escape "${!name}")"
+  done < <(compgen -e | LC_ALL=C sort)
+}
+
 render() {
   local line
   sed -e "s|__LABEL__|$(escape "$LABEL")|g" \
@@ -80,7 +97,9 @@ render() {
       -e "s|__DATA_DIR__|$(escape "$DATA_DIR")|g" \
       "$TEMPLATE" |
     while IFS= read -r line; do
-      if [[ "$line" == "__SCHEDULE__" ]]; then printf '%s\n' "$SCHEDULE"; else printf '%s\n' "$line"; fi
+      if [[ "$line" == "__SCHEDULE__" ]]; then printf '%s\n' "$SCHEDULE"
+      elif [[ "$line" == "__EXTRA_ENV__" ]]; then extra_env
+      else printf '%s\n' "$line"; fi
     done
 }
 

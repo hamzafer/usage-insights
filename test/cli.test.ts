@@ -261,10 +261,42 @@ describe("backfill:tokens", () => {
 });
 
 describe("launchd", () => {
-  function render(...args: string[]) {
-    const proc = Bun.spawnSync(args, { cwd: root, env: { ...process.env, USAGE_INSIGHTS_DATA_DIR: dataDir } });
+  /** The installer's environment without the settings these tests set themselves. */
+  function baseEnv(): Record<string, string | undefined> {
+    return Object.fromEntries(
+      Object.entries(process.env).filter(([k]) => !k.startsWith("USAGE_INSIGHTS_") && !k.startsWith("TELEGRAM_") && !k.startsWith("ANTHROPIC_")),
+    );
+  }
+
+  function renderWith(env: Record<string, string>, ...args: string[]) {
+    const proc = Bun.spawnSync(args, { cwd: root, env: { ...baseEnv(), USAGE_INSIGHTS_DATA_DIR: dataDir, ...env } });
     return { code: proc.exitCode, out: proc.stdout.toString() };
   }
+
+  const render = (...args: string[]) => renderWith({}, ...args);
+
+  test("the installer's Usage Insights settings and Telegram state dir go into the plist, never keys or tokens", () => {
+    const out = renderWith(
+      {
+        USAGE_INSIGHTS_PORT: "6800",
+        USAGE_INSIGHTS_CLAUDE_MODEL: "model<a&b>",
+        TELEGRAM_STATE_DIR: "/tmp/fake-telegram",
+        ANTHROPIC_API_KEY: "sk-fake-secret",
+        TELEGRAM_BOT_TOKEN: "123:fake-token",
+        USAGE_INSIGHTS_API_KEY: "fake-key",
+        USAGE_INSIGHTS_BOT_TOKEN: "fake-token-2",
+        USAGE_INSIGHTS_SECRET: "fake-secret",
+      },
+      "scripts/launchd.sh", "install", "--print", "report", root,
+    ).out;
+    expect(out).toContain("<key>USAGE_INSIGHTS_PORT</key>\n    <string>6800</string>");
+    expect(out).toContain("<key>USAGE_INSIGHTS_CLAUDE_MODEL</key>\n    <string>model&lt;a&amp;b&gt;</string>");
+    expect(out).toContain("<key>TELEGRAM_STATE_DIR</key>\n    <string>/tmp/fake-telegram</string>");
+    expect(out.match(/<key>USAGE_INSIGHTS_DATA_DIR<\/key>/g)).toHaveLength(1);
+    for (const secret of ["sk-fake-secret", "fake-token", "fake-key", "fake-secret", "ANTHROPIC_API_KEY", "TOKEN", "SECRET", "_KEY"]) {
+      expect(out).not.toContain(secret);
+    }
+  });
 
   test("one template renders both jobs: label, command, schedule and log per job", () => {
     const recorder = render("scripts/launchd.sh", "install", "--print", "recorder", root);
