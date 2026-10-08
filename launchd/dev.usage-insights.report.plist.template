@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Rendered by scripts/install-report-launchd.sh; do not edit the installed copy.
+     No secrets here: the Telegram token is read from the Telegram plugin's state at run time. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.usage-insights.report</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__BUN__</string>
+    <string>run</string>
+    <string>report</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__REPO__</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>__BUN_DIR__:/usr/bin:/bin</string>
+    <key>USAGE_INSIGHTS_DATA_DIR</key>
+    <string>__DATA_DIR__</string>
+  </dict>
+  <!-- Mondays at 09:00 local time. A run missed while the Mac slept happens on wake. -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Weekday</key>
+    <integer>1</integer>
+    <key>Hour</key>
+    <integer>9</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>__DATA_DIR__/report.log</string>
+  <key>StandardErrorPath</key>
+  <string>__DATA_DIR__/report.log</string>
+</dict>
+</plist>

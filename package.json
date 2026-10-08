@@ -9,6 +9,7 @@
     "status": "bun run src/cli/status.ts",
     "summary": "bun run src/cli/summary.ts",
     "dashboard": "bun run src/cli/dashboard.ts",
+    "report": "bun run src/cli/report.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
