@@ -19,7 +19,8 @@ describe("buildReport: the 7 days before now", () => {
 
   test("Pace for every running Cycle", () => {
     expect(report.pace.map((p) => [p.provider, p.label, p.expectedWaste])).toEqual([
-      ["codex", "Weekly", expect.closeTo(0.2125, 6)],
+      // Anchored at the previous Cycle's Reset (10-08 09:00, usage 0): 40% in 75h, 93h left → 89.6% used.
+      ["codex", "Weekly", expect.closeTo(0.104, 6)],
     ]);
   });
 

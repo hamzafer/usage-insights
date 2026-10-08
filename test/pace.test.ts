@@ -106,10 +106,50 @@ test("an untouched Cycle with a known length heads for 100% Waste", () => {
   expect(paceOfRunningCycles(windows)).toEqual([expect.objectContaining({ usedShare: 0, expectedWaste: 1 })]);
 });
 
-test("without a Window length, Pace still uses the Cycle's own readings", () => {
+test("without a Window length or an earlier Window, readings an hour apart give no rate yet (⚪)", () => {
+  // One hour of readings, 5 days before the Reset: neither 24h nor 10% of the Cycle.
   const windows = deriveWindows([reading("2026-10-09T23:00:00.000Z", 10), reading("2026-10-10T00:00:00.000Z", 30)], NOW);
 
   expect(paceOfRunningCycles(windows)).toEqual([
-    expect.objectContaining({ periodMs: null, projectedLimitHitAt: "2026-10-10T03:30:00.000Z" }),
+    expect.objectContaining({ periodMs: null, projectedShare: null, expectedWaste: null, projectedLimitHitAt: null }),
+  ]);
+});
+
+test("without a Window length, readings spanning 24 hours give a rate from the Cycle's own readings", () => {
+  // 10% → 30% in 24h; 4 days 23h left → the limit 70% / 20% a day = 3.5 days after Oct 10 00:00.
+  const windows = deriveWindows([reading("2026-10-09T00:00:00.000Z", 10), reading("2026-10-10T00:00:00.000Z", 30)], NOW);
+
+  expect(paceOfRunningCycles(windows)).toEqual([
+    expect.objectContaining({ periodMs: null, projectedShare: 1, projectedLimitHitAt: "2026-10-13T12:00:00.000Z" }),
+  ]);
+});
+
+test("without a Window length, readings spanning 10% of the Cycle are enough for a short Cycle", () => {
+  // A Cycle running from 06:00 to its Reset at 18:00 (12h): 2 hours of readings is over 10%.
+  const resetsAt = "2026-10-10T18:00:00.000Z";
+  const windows = deriveWindows(
+    [reading("2026-10-10T06:00:00.000Z", 10, { resetsAt }), reading("2026-10-10T08:00:00.000Z", 20, { resetsAt })],
+    "2026-10-10T08:00:00.000Z",
+  );
+
+  expect(paceOfRunningCycles(windows)).toEqual([expect.objectContaining({ projectedShare: 0.7, expectedWaste: expect.closeTo(0.3, 10) })]);
+});
+
+test("after an early Reset, Pace is anchored at the previous Window's end, not at Reset minus the length", () => {
+  // The Cycle due to reset Oct 9 12:00 reset early, by Oct 9 00:00 (seen in the next reading); the new
+  // Cycle resets Oct 15 00:00 with a 7-day length, so Reset − length is Oct 8 00:00, before the early Reset.
+  // From Oct 9 00:00 (usage 0): 30% in 1 day → the limit 70% / 30% a day after Oct 10 00:00 = Oct 12 08:00.
+  const windows = deriveWindows(
+    [
+      reading("2026-10-07T00:00:00.000Z", 40, { resetsAt: "2026-10-09T12:00:00.000Z", periodMs: WEEK }),
+      reading("2026-10-09T00:00:00.000Z", 0, { periodMs: WEEK }),
+      reading("2026-10-10T00:00:00.000Z", 30, { periodMs: WEEK }),
+    ],
+    NOW,
+  );
+  expect(windows.filter((w) => !w.endedAt)).toHaveLength(1);
+
+  expect(paceOfRunningCycles(windows)).toEqual([
+    expect.objectContaining({ usedShare: 0.3, projectedShare: 1, projectedLimitHitAt: "2026-10-12T08:00:00.000Z" }),
   ]);
 });
