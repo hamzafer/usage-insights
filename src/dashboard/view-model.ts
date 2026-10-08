@@ -1,3 +1,4 @@
+import { type Calibration, claudeCalibration, type EstimatedWaste } from "../calibration.ts";
 import { limitsOverageAndPace } from "../limits-summary.ts";
 import type { CycleOverage } from "../overage.ts";
 import type { Pace } from "../pace.ts";
@@ -101,6 +102,10 @@ export interface DataHealth {
   recorderGaps: Gap[];
   /** Stretches without Snapshots per Provider, newest first. */
   snapshotGaps: (Span & { provider: string })[];
+  /** Claude calibration per account and line: samples, tokens per 1%, ready or calibrating. */
+  calibration: Calibration[];
+  /** Past Claude Cycles' Estimated Waste, newest first; empty while calibrating. Never Measured. */
+  estimatedWaste: EstimatedWaste[];
 }
 
 export interface ProjectsPage {
@@ -195,7 +200,10 @@ export function buildHealth(data: DashboardData, now: string | Date): DataHealth
   const nowMs = toMs(now);
   const byProvider = Map.groupBy(data.readings, (r) => r.provider);
   const providers = [...byProvider.keys()].toSorted();
+  const claude = claudeCalibration(data.readings, data.tokens ?? [], now);
   return {
+    calibration: claude.calibrations,
+    estimatedWaste: claude.estimates.toReversed(),
     providers: providers.map((provider) => {
       const snapshots = byProvider.get(provider)!.filter((r) => r.source === RECORDER_SOURCE);
       const newest = snapshots.length ? Math.max(...snapshots.map((r) => toMs(r.fetchedAt))) : null;
