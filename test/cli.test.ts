@@ -259,3 +259,39 @@ describe("backfill:tokens", () => {
     expect(summary.out).not.toContain(dataDir);
   });
 });
+
+describe("launchd", () => {
+  function render(...args: string[]) {
+    const proc = Bun.spawnSync(args, { cwd: root, env: { ...process.env, USAGE_INSIGHTS_DATA_DIR: dataDir } });
+    return { code: proc.exitCode, out: proc.stdout.toString() };
+  }
+
+  test("one template renders both jobs: label, command, schedule and log per job", () => {
+    const recorder = render("scripts/launchd.sh", "install", "--print", "recorder", root);
+    expect(recorder.code).toBe(0);
+    expect(recorder.out).toContain("<string>dev.usage-insights.recorder</string>");
+    expect(recorder.out).toContain("<string>record</string>");
+    expect(recorder.out).toContain("<key>StartInterval</key>\n  <integer>300</integer>");
+    expect(recorder.out).toContain(`<string>${dataDir}/recorder.log</string>`);
+    expect(recorder.out).not.toContain("__");
+
+    const report = render("scripts/launchd.sh", "install", "--print", "report", root);
+    expect(report.out).toContain("<string>dev.usage-insights.report</string>");
+    expect(report.out).toContain("<key>StartCalendarInterval</key>");
+    expect(report.out).toContain(`<string>${dataDir}/report.log</string>`);
+    expect(report.out).not.toContain("__");
+  });
+
+  test("the per-job scripts are thin wrappers with the same output", () => {
+    expect(render("scripts/install-launchd.sh", "--print", root).out).toBe(
+      render("scripts/launchd.sh", "install", "--print", "recorder", root).out,
+    );
+    expect(render("scripts/install-report-launchd.sh", "--print", root).out).toBe(
+      render("scripts/launchd.sh", "install", "--print", "report", root).out,
+    );
+  });
+
+  test("an unknown job is refused", () => {
+    expect(render("scripts/launchd.sh", "install", "--print", "nightly", root).code).toBe(64);
+  });
+});

@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-# Stops and removes the weekly Report's launchd agent. Saved Reports are left in place.
+# Stops and removes the weekly Report's launchd agent. Saved Reports are left in place. Thin wrapper.
 set -euo pipefail
-
-LABEL="dev.usage-insights.report"
-launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
-rm -f "$HOME/Library/LaunchAgents/$LABEL.plist"
-echo "Uninstalled $LABEL"
+exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/launchd.sh" uninstall report

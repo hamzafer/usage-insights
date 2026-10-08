@@ -1,15 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- Rendered by scripts/install-launchd.sh; do not edit the installed copy. -->
+<!-- Rendered by scripts/launchd.sh for one job (recorder or report); do not edit the installed copy.
+     No secrets here: the Telegram token is read from the Telegram plugin's state at run time. -->
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>dev.usage-insights.recorder</string>
+  <string>__LABEL__</string>
   <key>ProgramArguments</key>
   <array>
     <string>__BUN__</string>
     <string>run</string>
-    <string>record</string>
+    <string>__SCRIPT__</string>
   </array>
   <key>WorkingDirectory</key>
   <string>__REPO__</string>
@@ -20,13 +21,10 @@
     <key>USAGE_INSIGHTS_DATA_DIR</key>
     <string>__DATA_DIR__</string>
   </dict>
-  <key>StartInterval</key>
-  <integer>300</integer>
-  <key>RunAtLoad</key>
-  <true/>
+__SCHEDULE__
   <key>StandardOutPath</key>
-  <string>__DATA_DIR__/recorder.log</string>
+  <string>__DATA_DIR__/__LOG__</string>
   <key>StandardErrorPath</key>
-  <string>__DATA_DIR__/recorder.log</string>
+  <string>__DATA_DIR__/__LOG__</string>
 </dict>
 </plist>
