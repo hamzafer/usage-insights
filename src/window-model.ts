@@ -97,7 +97,7 @@ function windowsOfLine(line: Reading[], nowMs: number): Window[] {
       resetsAt,
       readings: group,
       endedAt,
-      waste: endedAt ? wasteAt(group, endedAt) : null,
+      waste: endedAt && hasStarted(group) ? wasteAt(group, endedAt) : null,
     };
   });
 }
@@ -105,6 +105,7 @@ function windowsOfLine(line: Reading[], nowMs: number): Window[] {
 /** A Reset lies between the Window's readings so far and `r`. */
 function startsNewWindow(window: Reading[], r: Reading): boolean {
   const last = window.at(-1)!;
+  if (!hasStarted(window) && hasStarted([r])) return true;
   const reset = knownReset(window);
   if (reset && r.resetsAt && ms(r.resetsAt) - ms(reset) > RESET_TOLERANCE_MS) return true;
   // Fetched after the Reset: a new Window, unless the reading still reports the old Reset (stale).
@@ -134,6 +135,14 @@ function wasteAt(window: Reading[], endedAt: string): Waste | null {
     lowConfidence: ms(endedAt) - ms(last.fetchedAt) > LOW_CONFIDENCE_GAP_MS,
     basis: last.source.startsWith("backfill:claude") ? "estimated" : "measured",
   };
+}
+
+/**
+ * A Window started once any reading shows usage or a reset time (spec §3). An unstarted Session
+ * (OpenUsage reports used 0 with no reset time) has no Waste: that time is Idle Capacity.
+ */
+export function hasStarted(readings: readonly Reading[]): boolean {
+  return readings.some((r) => r.used > 0 || r.resetsAt !== null);
 }
 
 /** The Window's Reset, rounded to the minute: the first one any of its readings reported. */

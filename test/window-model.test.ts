@@ -197,3 +197,30 @@ describe("Waste edge cases", () => {
     expect(window.waste).toBeNull();
   });
 });
+
+describe("Session Waste", () => {
+  const session = (at: string, used: number, resetsAt: string | null) =>
+    reading(at, used, resetsAt, { label: "Session", role: "session" });
+
+  test("a started Session has Waste; an unstarted one (no usage, no reset time) has none", () => {
+    const windows = deriveWindows(
+      [
+        session("2026-10-08T10:00:00.000Z", 20, "2026-10-08T14:00:00.250Z"),
+        session("2026-10-08T13:50:00.000Z", 60, "2026-10-08T14:00:00.250Z"),
+        session("2026-10-08T14:30:00.000Z", 0, null),
+        session("2026-10-08T15:30:00.000Z", 0, null),
+        session("2026-10-08T16:10:00.000Z", 5, "2026-10-08T21:00:00.000Z"),
+      ],
+      NOW,
+    );
+
+    expect(windows.map((w) => [w.readings.length, w.endedAt])).toEqual([
+      [2, "2026-10-08T14:00:00.000Z"],
+      [2, "2026-10-08T16:10:00.000Z"],
+      [1, "2026-10-08T21:00:00.000Z"],
+    ]);
+    expect(windows[0]!.waste?.share).toBe(0.4);
+    expect(windows[1]!.waste).toBeNull();
+    expect(windows[2]!.waste?.share).toBe(0.95);
+  });
+});
