@@ -1,19 +1,30 @@
 import { expect, test } from "bun:test";
 import { buildReport } from "../src/report/build.ts";
-import { type ClaudeClient, ClaudeSuggestions, MAX_SUGGESTION_CHARS, parseSuggestions } from "../src/report/claude-suggestions.ts";
+import {
+  type ClaudeClient,
+  ClaudeSuggestions,
+  MAX_SUGGESTION_CHARS,
+  parseSuggestions,
+  SUGGESTION_TARGET_CHARS,
+} from "../src/report/claude-suggestions.ts";
+import { SUGGESTION_CHARS } from "../src/report/card.ts";
 import { input } from "./report-fixtures.ts";
 
 const SETUP = "# Setup\n\n- Codex Team: code reviews\n- Cursor Team: rarely used, $20/month allowance\n";
 const DRAFT_SETUP = `# Setup (DRAFT: fill in and remove this word)\n${SETUP}`;
 
-/** Claude behind the interface: records the prompt, answers with a fixed text or fails. */
+/** Claude behind the interface: records each prompt, answers in turn (the last answer repeats) or fails. */
 class FakeClaude implements ClaudeClient {
   prompts: { system: string; user: string }[] = [];
-  constructor(private readonly answer: string | Error) {}
+  private readonly answers: (string | Error)[];
+  constructor(...answers: (string | Error)[]) {
+    this.answers = answers;
+  }
   async ask(prompt: { system: string; user: string }) {
     this.prompts.push(prompt);
-    if (this.answer instanceof Error) throw this.answer;
-    return this.answer;
+    const answer = this.answers[Math.min(this.prompts.length - 1, this.answers.length - 1)]!;
+    if (answer instanceof Error) throw answer;
+    return answer;
   }
 }
 
@@ -85,20 +96,70 @@ test("the prompt asks for short, one-sentence Suggestions about the Setup, never
   const claude = new FakeClaude('{"suggestions": []}');
   await new ClaudeSuggestions({ client: claude, readSetup: () => DRAFT_SETUP, timeZone: "UTC" }).suggest(report);
   const user = claude.prompts[0]!.user;
-  expect(user).toContain(`at most ${MAX_SUGGESTION_CHARS} characters`);
+  expect(user).toContain(`at most ${SUGGESTION_TARGET_CHARS} characters`);
   expect(user).toContain("one sentence");
   expect(user).toMatch(/never .*DRAFT/i);
 });
 
-test("a long Suggestion is shortened to 120 characters on a word boundary, the same in Markdown and Telegram", () => {
-  const long = "Move all code reviews from Claude (Work) to Codex Team, because Codex reset with 62% wasted while Claude hit its limit twice this week.";
-  const { items } = parseSuggestions(JSON.stringify({ suggestions: [long] })) as { items: string[] };
-  const item = items[0]!;
-  expect([...item].length).toBeLessThanOrEqual(MAX_SUGGESTION_CHARS);
-  expect(item).toEndWith("…");
-  const kept = item.slice(0, -1);
-  expect(long.startsWith(kept)).toBe(true);
-  expect(long[kept.length]).toBe(" ");
+const LONG =
+  "Move all code reviews from Claude (Work) to Codex Team, because Codex reset with 62% wasted while Claude hit its limit twice this week, and keep it there.";
+const SHORT = "Move code reviews to Codex: it reset with 62% wasted.";
+
+test("parsing never cuts a Suggestion: long ones are kept whole for the caller to handle", () => {
+  expect([...LONG].length).toBeGreaterThan(MAX_SUGGESTION_CHARS);
+  expect(parseSuggestions(JSON.stringify({ suggestions: [LONG] }))).toEqual({ ok: true, items: [LONG] });
+});
+
+test("a too-long Suggestion is rewritten once by Claude, keeping its place, and never ends cut off", async () => {
+  const claude = new FakeClaude(JSON.stringify({ suggestions: ["Use Cursor for side projects.", LONG] }), JSON.stringify({ suggestions: [SHORT] }));
+  const result = await new ClaudeSuggestions({ client: claude, readSetup: () => SETUP }).suggest(report);
+  expect(result).toEqual({ ok: true, items: ["Use Cursor for side projects.", SHORT] });
+  expect(claude.prompts).toHaveLength(2);
+  expect(claude.prompts[1]!.user).toContain(LONG);
+  expect(claude.prompts[1]!.user).toContain(`at most ${SUGGESTION_TARGET_CHARS} characters`);
+});
+
+test("a Suggestion still too long after the rewrite, or a failed rewrite, is dropped rather than cut", async () => {
+  const stillLong = new FakeClaude(JSON.stringify({ suggestions: [SHORT, LONG] }), JSON.stringify({ suggestions: [LONG] }));
+  expect(await new ClaudeSuggestions({ client: stillLong, readSetup: () => SETUP }).suggest(report)).toEqual({ ok: true, items: [SHORT] });
+
+  const rewriteFails = new FakeClaude(JSON.stringify({ suggestions: [SHORT, LONG] }), new Error("Claude API error (HTTP 529): Overloaded"));
+  expect(await new ClaudeSuggestions({ client: rewriteFails, readSetup: () => SETUP }).suggest(report)).toEqual({ ok: true, items: [SHORT] });
+});
+
+const LONG_B =
+  "Route every small side-project task from Claude (personal) to Copilot Student, which has used 0% of its 200 premium requests this month so far, so they all go to waste.";
+const SHORT_B = "Route small side-project tasks to Copilot: 0% of 200 requests used.";
+
+test("two long Suggestions are both rewritten, each keeping its own place", async () => {
+  const claude = new FakeClaude(
+    JSON.stringify({ suggestions: [LONG, SHORT, LONG_B] }),
+    JSON.stringify({ suggestions: [SHORT, SHORT_B] }),
+  );
+  const result = await new ClaudeSuggestions({ client: claude, readSetup: () => SETUP }).suggest(report);
+  expect(result).toEqual({ ok: true, items: [SHORT, SHORT, SHORT_B] });
+});
+
+test("a rewrite with a different number of Suggestions than sent drops the long ones, never misplacing a rewrite", async () => {
+  const fewer = new FakeClaude(JSON.stringify({ suggestions: [LONG, SHORT, LONG_B] }), JSON.stringify({ suggestions: [SHORT_B] }));
+  expect(await new ClaudeSuggestions({ client: fewer, readSetup: () => SETUP }).suggest(report)).toEqual({ ok: true, items: [SHORT] });
+
+  // A rewrite that turns into a DRAFT remark is filtered, which also changes the count.
+  const draftish = new FakeClaude(
+    JSON.stringify({ suggestions: [LONG, SHORT, LONG_B] }),
+    JSON.stringify({ suggestions: ["Fill in the prices in your Setup.", SHORT_B] }),
+  );
+  expect(await new ClaudeSuggestions({ client: draftish, readSetup: () => SETUP }).suggest(report)).toEqual({ ok: true, items: [SHORT] });
+});
+
+test("the card cuts at the same length a Suggestion may have, so a kept Suggestion is never cut", () => {
+  expect(SUGGESTION_CHARS).toBe(MAX_SUGGESTION_CHARS);
+});
+
+test("Suggestions within the limit cost no second call", async () => {
+  const claude = new FakeClaude(JSON.stringify({ suggestions: [SHORT] }));
+  await new ClaudeSuggestions({ client: claude, readSetup: () => SETUP }).suggest(report);
+  expect(claude.prompts).toHaveLength(1);
 });
 
 test("a Suggestion that only says the Setup is a DRAFT or to fill in prices is dropped (the DRAFT line says it)", () => {
