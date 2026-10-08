@@ -173,6 +173,24 @@ describe("pages", () => {
     expect(body).toContain("low confidence");
   });
 
+  test("a Provider path that is not valid percent-encoding is a 404, not a crash", async () => {
+    seed();
+    expect((await get("/provider/%E0%A4%A")).status).toBe(404);
+    expect((await get("/api/provider/%")).status).toBe(404);
+  });
+
+  test("requests for another host name or port are refused (DNS rebinding)", async () => {
+    seed();
+    const guarded = dashboardHandler({ load: () => loadDashboardData(dbPath), now: () => new Date(NOW), timeZone: "UTC", port: 6740 });
+    const status = async (host: string) =>
+      (await guarded(new Request("http://127.0.0.1:6740/api/overview", { headers: { host } }))).status;
+    expect(await status("127.0.0.1:6740")).toBe(200);
+    expect(await status("localhost:6740")).toBe(200);
+    expect(await status("evil.example:6740")).toBe(403);
+    expect(await status("127.0.0.1:6741")).toBe(403);
+    expect(await status("localhost")).toBe(403);
+  });
+
   test("unknown paths are 404 and other methods are 405", async () => {
     expect((await get("/nope")).status).toBe(404);
     expect((await get("/", "POST")).status).toBe(405);
