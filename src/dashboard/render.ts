@@ -100,6 +100,7 @@ export function renderHealth(h: DataHealth, ctx: PageContext): string {
         { html: p.stale ? `<span class="status warn"><span aria-hidden="true">!</span> stale</span>` : `<span class="status ok"><span aria-hidden="true">✓</span> current</span>` },
       ]),
       "No readings recorded yet.",
+      true,
     )}
   </section>
   <section class="block">
@@ -109,6 +110,7 @@ export function renderHealth(h: DataHealth, ctx: PageContext): string {
       ["Provider", "Line", "Last seen"],
       h.unclassified.map((u) => [providerName(u.provider), u.label, formatTime(u.lastSeenAt, ctx)]),
       "None. Every line has a role.",
+      true,
     )}
   </section>
   <section class="block">
@@ -118,6 +120,7 @@ export function renderHealth(h: DataHealth, ctx: PageContext): string {
       ["When", "Reason"],
       h.recorderGaps.map((g) => [formatTime(g.recordedAt, ctx), g.reason]),
       "No recorder gaps.",
+      true,
     )}
   </section>
   <section class="block">
@@ -132,6 +135,7 @@ export function renderHealth(h: DataHealth, ctx: PageContext): string {
         formatDuration(Date.parse(g.to) - Date.parse(g.from)),
       ]),
       "None.",
+      true,
     )}
   </section>`;
   return page("Data health", "/health", ctx, body);
@@ -159,8 +163,9 @@ function overviewSection(p: ProviderOverview, health: DataHealth, ctx: PageConte
   const hits = p.limitHits.count
     ? `<dd class="figure">${p.limitHits.count}</dd><dd class="note">${p.limitHits.stillBlocked ? "blocked now, " : ""}blocked ${e(formatDuration(p.limitHits.blockedMs))} in total</dd>`
     : `<dd class="figure">0</dd><dd class="note">never blocked</dd>`;
-  const overage = p.overage.length
-    ? p.overage
+  const spent = p.overage.filter((o) => o.spent > 0);
+  const overage = spent.length
+    ? spent
         .map((o) => `<dd class="figure">${e(formatAmount(o.spent, o.unit))}</dd><dd class="note">${e(o.overageLabel)}, ${o.cycleEndedAt ? "last Cycle" : "this Cycle"}</dd>`)
         .join("")
     : `<dd class="figure">none</dd><dd class="note">no paid usage recorded</dd>`;
@@ -243,10 +248,10 @@ function encodingKey(): string {
 
 type Cell = string | { html: string };
 
-function table(head: readonly string[], rows: readonly Cell[][], empty = "No rows yet."): string {
+function table(head: readonly string[], rows: readonly Cell[][], empty = "No rows yet.", open = false): string {
   if (!rows.length) return `<p class="empty">${e(empty)}</p>`;
   const cell = (c: Cell) => (typeof c === "string" ? e(c) : c.html);
-  return `<details class="table"><summary>Table (${rows.length} row${rows.length === 1 ? "" : "s"})</summary><div class="scroll"><table><thead><tr>${head
+  return `<details class="table"${open ? " open" : ""}><summary>Table (${rows.length} row${rows.length === 1 ? "" : "s"})</summary><div class="scroll"><table><thead><tr>${head
     .map((h) => `<th scope="col">${e(h)}</th>`)
     .join("")}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${cell(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div></details>`;
 }
@@ -265,6 +270,7 @@ function page(title: string, path: string, ctx: PageContext, body: string): stri
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:,">
 <title>${e(title)} | Usage Insights</title>
 <style>${CSS}</style>
 </head>
@@ -379,7 +385,7 @@ h2 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -.005em; }
 .m-now span { position: absolute; top: calc(100% + 2px); left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 11px; color: var(--muted); }
 .running-foot { display: flex; flex-wrap: wrap; gap: 2px 16px; margin: 22px 0 0; font-size: 14px; color: var(--ink-2); }
 .running-foot strong { color: var(--ink); font-weight: 600; }
-.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px 24px; margin: 0; border-top: 1px solid var(--grid); padding-top: 14px; }
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px 20px; margin: 0; border-top: 1px solid var(--grid); padding-top: 14px; }
 .figures dt { font-size: 13px; color: var(--ink-2); margin-bottom: 2px; }
 .figures dd { margin: 0; }
 .figure { font-size: 30px; font-weight: 600; letter-spacing: -.02em; line-height: 1.15; }
@@ -415,12 +421,13 @@ h2 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -.005em; }
 .col.s1 { fill: var(--s1); } .col.s2 { fill: var(--s2); }
 .col.est { fill: url(#hatch); }
 .hatch-bg { fill: var(--s1); } .hatch-line { stroke: var(--surface); stroke-opacity: .55; stroke-width: 2; }
-.col.faint, .dot.faint { opacity: .4; }
+g.faint, .dot.faint { opacity: .4; }
 .dot { fill: var(--s1); stroke: var(--surface); stroke-width: 2; }
 .dot.est { fill: url(#hatch); }
 .missing-dot { fill: var(--surface); stroke: var(--muted); stroke-width: 2; }
-.gap { fill: var(--gap-ink); fill-opacity: .35; outline: none; }
-.gap:focus-visible, .gap:hover { fill-opacity: .6; }
+.gap { fill: url(#gaphatch); outline: none; }
+.gaphatch-bg { fill: var(--gap-ink); fill-opacity: .18; } .gaphatch-line { stroke: var(--muted); stroke-width: 1.5; stroke-opacity: .6; }
+.gap:focus-visible, .gap:hover { opacity: .7; }
 details.table { margin-top: 10px; font-size: 13px; }
 details.table summary { color: var(--ink-2); cursor: pointer; width: max-content; }
 .scroll { overflow-x: auto; }

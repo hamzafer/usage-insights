@@ -90,13 +90,13 @@ function columns(cols: readonly Column[], o: ColumnOptions): string {
       return `<g class="mark missing">${hit}<circle cx="${pct(cx)}" cy="${base - 5}" r="4" class="missing-dot"/></g>`;
     }
     const h = Math.max(c.share * plotH, 2);
-    const cls = ["col", `s${slot}`, c.estimated ? "est" : "", c.faint ? "faint" : ""].filter(Boolean).join(" ");
+    const cls = ["col", `s${slot}`, c.estimated ? "est" : ""].filter(Boolean).join(" ");
     const w = `min(${MAX_COLUMN_PX}px, ${pct(band * 0.6)})`;
     const uh = (c.unknown ?? 0) * plotH;
     const unknown =
       uh >= 3 ? `<rect class="gap" x="-12" y="${y(c.share) - uh}" width="24" height="${uh - 2}" rx="${Math.min(4, (uh - 2) / 2)}"/>` : "";
     // A centered column: a <svg> placed at the band center, the bar drawn around x=0 with overflow visible.
-    return `<g class="mark">${hit}<svg x="${pct(cx)}" y="0" overflow="visible" class="colwrap" style="--w:${w}"><rect class="${cls}" x="-12" y="${y(c.share)}" width="24" height="${h}" rx="${Math.min(4, h / 2)}"/><rect class="${cls} foot" x="-12" y="${base - Math.min(4, h / 2)}" width="24" height="${Math.min(4, h / 2)}"/>${unknown}</svg></g>`;
+    return `<g class="mark">${hit}<svg x="${pct(cx)}" y="0" overflow="visible" class="colwrap" style="--w:${w}"><g${c.faint ? ' class="faint"' : ""}><rect class="${cls}" x="-12" y="${y(c.share)}" width="24" height="${h}" rx="${Math.min(4, h / 2)}"/><rect class="${cls} foot" x="-12" y="${base - Math.min(4, h / 2)}" width="24" height="${Math.min(4, h / 2)}"/></g>${unknown}</svg></g>`;
   });
 
   const last = cols.at(-1);
@@ -163,9 +163,9 @@ function gridLines(plotH: number): string {
     .join("");
 }
 
-/** 45° hatch for Estimated fills, defined once per page. */
+/** 45° hatches, defined once per page: Estimated fills (series ink) and gaps (muted ink). */
 export const HATCH_DEFS =
-  '<svg width="0" height="0" aria-hidden="true" style="position:absolute"><defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" class="hatch-bg"/><line x1="0" y1="0" x2="0" y2="6" class="hatch-line"/></pattern></defs></svg>';
+  '<svg width="0" height="0" aria-hidden="true" style="position:absolute"><defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" class="hatch-bg"/><line x1="0" y1="0" x2="0" y2="6" class="hatch-line"/></pattern><pattern id="gaphatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" class="gaphatch-bg"/><line x1="0" y1="0" x2="0" y2="6" class="gaphatch-line"/></pattern></defs></svg>';
 
 function confidenceNote(waste: Waste | null): string {
   return waste?.lowConfidence ? " (low confidence: sparse readings before the Reset)" : "";
