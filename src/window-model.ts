@@ -47,11 +47,13 @@ export interface Window {
   waste: Waste | null;
 }
 
+/**
+ * Splits readings into Windows per line (provider + label), sorted by provider, label, then time.
+ * A Window has ended once a later Window was seen or its Reset is at or before `now`.
+ */
 export function deriveWindows(readings: readonly Reading[], now: string | Date): Window[] {
-  void now;
-  const windows: Window[] = [];
-  for (const line of groupByLine(readings)) windows.push(...windowsOfLine(line));
-  return windows;
+  const nowMs = typeof now === "string" ? ms(now) : now.getTime();
+  return groupByLine(readings).flatMap((line) => windowsOfLine(line, nowMs));
 }
 
 function groupByLine(readings: readonly Reading[]): Reading[][] {
@@ -62,15 +64,16 @@ function groupByLine(readings: readonly Reading[]): Reading[][] {
     if (line) line.push(r);
     else lines.set(key, [r]);
   }
-  return [...lines.values()].map((line) => line.toSorted((a, b) => ms(a.fetchedAt) - ms(b.fetchedAt)));
+  return [...lines.values()]
+    .toSorted((a, b) => compare(a[0]!.provider, b[0]!.provider) || compare(a[0]!.label, b[0]!.label))
+    .map((line) => line.toSorted((a, b) => ms(a.fetchedAt) - ms(b.fetchedAt)));
 }
 
-function windowsOfLine(line: Reading[]): Window[] {
+function windowsOfLine(line: Reading[], nowMs: number): Window[] {
   const groups: Reading[][] = [];
   let current: Reading[] = [];
   for (const r of line) {
-    const last = current.at(-1);
-    if (last && last.resetsAt && r.resetsAt && ms(r.resetsAt) - ms(last.resetsAt) > RESET_TOLERANCE_MS) {
+    if (current.length && startsNewWindow(current, r)) {
       groups.push(current);
       current = [];
     }
@@ -80,11 +83,13 @@ function windowsOfLine(line: Reading[]): Window[] {
 
   return groups.map((group, i) => {
     const first = group[0]!;
-    const last = group.at(-1)!;
-    const ended = i < groups.length - 1;
-    const known = group.find((r) => r.resetsAt)?.resetsAt;
-    const resetsAt = known ? roundToMinute(known) : null;
-    const endedAt = ended ? resetsAt : null;
+    const resetsAt = knownReset(group);
+    const next = groups[i + 1]?.[0];
+    const endedAt = next
+      ? resetMoment(resetsAt, next)
+      : resetsAt && ms(resetsAt) <= nowMs
+        ? resetsAt
+        : null;
     return {
       provider: first.provider,
       label: first.label,
@@ -92,17 +97,59 @@ function windowsOfLine(line: Reading[]): Window[] {
       resetsAt,
       readings: group,
       endedAt,
-      waste: endedAt
-        ? {
-            share: (last.limit - last.used) / last.limit,
-            lastReadingAt: last.fetchedAt,
-            lowConfidence: ms(endedAt) - ms(last.fetchedAt) > LOW_CONFIDENCE_GAP_MS,
-            basis: "measured",
-          }
-        : null,
+      waste: endedAt ? wasteAt(group, endedAt) : null,
     };
   });
 }
+
+/** A Reset lies between the Window's readings so far and `r`. */
+function startsNewWindow(window: Reading[], r: Reading): boolean {
+  const last = window.at(-1)!;
+  const reset = knownReset(window);
+  if (reset && r.resetsAt && ms(r.resetsAt) - ms(reset) > RESET_TOLERANCE_MS) return true;
+  // Fetched after the Reset: a new Window, unless the reading still reports the old Reset (stale).
+  const reportsSameReset = r.resetsAt && Math.abs(ms(r.resetsAt) - ms(reset ?? r.resetsAt)) <= RESET_TOLERANCE_MS;
+  if (reset && !reportsSameReset && ms(r.fetchedAt) - ms(reset) > RESET_TOLERANCE_MS) return true;
+  const before = share(last);
+  const after = share(r);
+  return after <= NEAR_ZERO_SHARE && before - after >= MIN_RESET_DROP;
+}
+
+/**
+ * When a Window ended: its reported Reset, unless the next Window's first reading came earlier
+ * (an early Reset, or none reported), which then bounds it.
+ */
+function resetMoment(resetsAt: string | null, next: Reading): string {
+  if (resetsAt && ms(resetsAt) <= ms(next.fetchedAt)) return resetsAt;
+  return next.fetchedAt;
+}
+
+/** Waste from the last reading at or before the Reset (a stale one fetched after it doesn't count). */
+function wasteAt(window: Reading[], endedAt: string): Waste | null {
+  const last = window.findLast((r) => ms(r.fetchedAt) <= ms(endedAt)) ?? window[0]!;
+  if (last.limit <= 0) return null;
+  return {
+    share: (last.limit - last.used) / last.limit,
+    lastReadingAt: last.fetchedAt,
+    lowConfidence: ms(endedAt) - ms(last.fetchedAt) > LOW_CONFIDENCE_GAP_MS,
+    basis: last.source.startsWith("backfill:claude") ? "estimated" : "measured",
+  };
+}
+
+/** The Window's Reset, rounded to the minute: the first one any of its readings reported. */
+function knownReset(window: Reading[]): string | null {
+  const reported = window.find((r) => r.resetsAt)?.resetsAt;
+  return reported ? roundToMinute(reported) : null;
+}
+
+function share(r: Reading): number {
+  return r.limit > 0 ? r.used / r.limit : 0;
+}
+
+/** Usage at or below this share counts as "back near zero". */
+const NEAR_ZERO_SHARE = 0.01;
+/** ...but only after a drop of at least this share, so small dips are not Resets. */
+const MIN_RESET_DROP = 0.05;
 
 /** A last reading older than this before the Reset makes its Waste low confidence. */
 export const LOW_CONFIDENCE_GAP_MS = 30 * 60_000;
@@ -112,6 +159,10 @@ const RESET_TOLERANCE_MS = 5 * 60_000;
 
 function roundToMinute(iso: string): string {
   return new Date(Math.round(ms(iso) / 60_000) * 60_000).toISOString();
+}
+
+function compare(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 function ms(iso: string): number {
