@@ -74,7 +74,7 @@ function readIfExists(path: string): string | null {
 
 type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
 
-/** Sends plain text to the chat via the Bot API's `sendMessage`. */
+/** Sends HTML (`parse_mode: "HTML"`, so callers escape their text) to the chat via the Bot API's `sendMessage`. */
 export class TelegramMessenger implements Messenger {
   constructor(
     private readonly credentials: () => TelegramCredentials = () => loadTelegramCredentials(),
@@ -90,7 +90,7 @@ export class TelegramMessenger implements Messenger {
       res = await this.fetchFn(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, text: fitTelegram(text), disable_web_page_preview: true }),
+        body: JSON.stringify({ chat_id: chatId, text: fitTelegram(text), parse_mode: "HTML", disable_web_page_preview: true }),
       });
     } catch (e) {
       throw new Error(`Telegram send failed: ${redact(e instanceof Error ? e.message : String(e))}`);
@@ -102,8 +102,23 @@ export class TelegramMessenger implements Messenger {
   }
 }
 
-/** Cuts text to Telegram's limit, marking the cut. */
+/**
+ * Cuts HTML text to Telegram's limit, marking the cut. It cuts at a line end when it can (never
+ * inside a tag or an entity) and closes the tags left open, so Telegram can still parse it.
+ */
 export function fitTelegram(text: string): string {
   if (text.length <= TELEGRAM_TEXT_LIMIT) return text;
-  return text.slice(0, TELEGRAM_TEXT_LIMIT - CUT_MARK.length) + CUT_MARK;
+  const budget = TELEGRAM_TEXT_LIMIT - CUT_MARK.length - CLOSING_ROOM;
+  let cut = text.slice(0, budget);
+  const lineEnd = cut.lastIndexOf("\n");
+  cut = lineEnd > budget / 2 ? cut.slice(0, lineEnd) : cut.replace(/<[^>]*$/, "").replace(/&[^;\s]*$/, "");
+  const open: string[] = [];
+  for (const [, closing, tag] of cut.matchAll(/<(\/?)([a-z-]+)[^>]*>/gi)) {
+    if (closing) open.splice(open.lastIndexOf(tag!), 1);
+    else open.push(tag!);
+  }
+  return cut + CUT_MARK + open.toReversed().map((t) => `</${t}>`).join("");
 }
+
+/** Room kept for closing the tags left open by a cut. */
+const CLOSING_ROOM = 64;

@@ -25,7 +25,7 @@ test("sends the Setup and the Report's numbers, and returns Claude's Suggestions
   expect(await provider.suggest(report)).toEqual({ ok: true, items: ["Move code reviews from Codex to Cursor: its allowance sits idle."] });
   const user = claude.prompts[0]!.user;
   expect(user).toContain("Cursor Team: rarely used");
-  expect(user).toContain("| codex | Weekly |");
+  expect(user).toContain("| Codex | Weekly |");
   expect(user).toContain("at most 3");
 });
 

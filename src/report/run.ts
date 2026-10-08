@@ -1,11 +1,12 @@
 import { buildReport, type ReportInput } from "./build.ts";
+import { escapeHtml } from "./format.ts";
 import { renderMarkdown, renderTelegram } from "./render.ts";
 import { noSuggestions, type Suggestions, type SuggestionsProvider } from "./suggestions.ts";
 import type { Messenger } from "./telegram.ts";
 
 /**
  * One Report run (`bun run report`, spec §6): refresh data with the incremental Backfills, build
- * the Report for the 7 days before now, save the full Markdown and send the short message. If
+ * the Report for the 7 days before now, save the full Markdown and send the compact card (HTML). If
  * building fails, a short "Usage Insights Report failed: <reason>" message goes out instead.
  */
 
@@ -75,7 +76,7 @@ export async function runReport(deps: ReportDeps): Promise<ReportRunResult> {
     }
   } catch (e) {
     deps.log(`Report failed: ${reason(e)}`);
-    message = `${prefix}Usage Insights Report failed: ${reason(e)}`;
+    message = `${prefix}Usage Insights Report failed: ${escapeHtml(reason(e))}`;
   }
 
   if (deps.dryRun) {
