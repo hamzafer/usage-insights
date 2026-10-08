@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Rendered by scripts/install-launchd.sh; do not edit the installed copy. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.usage-insights.recorder</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__BUN__</string>
+    <string>run</string>
+    <string>record</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__REPO__</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>__BUN_DIR__:/usr/bin:/bin</string>
+    <key>USAGE_INSIGHTS_DATA_DIR</key>
+    <string>__DATA_DIR__</string>
+  </dict>
+  <key>StartInterval</key>
+  <integer>300</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>__DATA_DIR__/recorder.log</string>
+  <key>StandardErrorPath</key>
+  <string>__DATA_DIR__/recorder.log</string>
+</dict>
+</plist>
