@@ -13,7 +13,8 @@ export interface Backfill {
   name: string;
   /** The job name its outcome is recorded under; default `backfill:<name in lower case>`. */
   job?: string;
-  run: () => void | Promise<void>;
+  /** Runs it; a returned promise is awaited before the outcome is recorded. */
+  run: () => unknown;
 }
 
 export const CODEX_BACKFILL_JOB = "backfill:codex";
@@ -32,12 +33,12 @@ export function incrementalBackfills(
       name: "Codex",
       job: CODEX_BACKFILL_JOB,
       // Logs can hold several Codex accounts: keep the one the live Recorder tracks, when known.
-      run: () => void backfillCodex({ sessionsDir: config.codexSessionsDir, store: store(), plan: store().livePlan("codex") }),
+      run: () => backfillCodex({ sessionsDir: config.codexSessionsDir, store: store(), plan: store().livePlan("codex") }),
     },
     {
       name: "Token",
       job: TOKEN_BACKFILL_JOB,
-      run: () => void backfillTokens({ claude: config.claudeProjectDirs, codexDir: config.codexSessionsDir, store: store() }),
+      run: () => backfillTokens({ claude: config.claudeProjectDirs, codexDir: config.codexSessionsDir, store: store() }),
     },
   ];
 }

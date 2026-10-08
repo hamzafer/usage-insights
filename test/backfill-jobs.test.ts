@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runDueBackfills } from "../src/backfill/jobs.ts";
+import { incrementalBackfills, runDueBackfills } from "../src/backfill/jobs.ts";
 import { openStore } from "../src/store.ts";
 
 const HOUR = 3_600_000;
@@ -53,6 +53,45 @@ test("a failing Backfill is recorded and logged, never thrown, and the next one 
     ok: false,
     reason: "sessions dir unreadable",
   });
+  store.close();
+});
+
+test("an async Backfill is finished before its success is recorded; a rejected one is recorded as failed", async () => {
+  const { store, logged, log } = setup();
+  let finished = false;
+  const backfills = [
+    { name: "Codex", job: "backfill:codex", run: async () => { await Bun.sleep(30); finished = true; } },
+    { name: "Token", job: "backfill:tokens", run: async () => { await Bun.sleep(10); throw new Error("logs unreadable"); } },
+  ];
+  await runDueBackfills({ backfills, store, now: () => new Date("2026-10-08T10:00:00.000Z"), log });
+  expect(finished).toBe(true);
+  expect(store.recentRuns(10).map((r) => [r.job, r.ok, r.reason])).toEqual([
+    ["backfill:tokens", false, "logs unreadable"],
+    ["backfill:codex", true, null],
+  ]);
+  expect(logged).toEqual(["Token Backfill failed: logs unreadable"]);
+  store.close();
+});
+
+test("the real Backfills' failures reach runDueBackfills and are recorded", async () => {
+  const { store, log } = setup();
+  const failing = {
+    ...store,
+    livePlan: () => null,
+    backfillProgress: () => {
+      throw new Error("progress unreadable");
+    },
+  };
+  const root = mkdtempSync(join(tmpdir(), "usage-insights-jobs-"));
+  const sessions = join(root, "sessions");
+  mkdirSync(sessions);
+  writeFileSync(join(sessions, "rollout-a.jsonl"), "{}\n");
+  const backfills = incrementalBackfills({ codexSessionsDir: sessions, claudeProjectDirs: [] }, () => failing);
+  await runDueBackfills({ backfills, store, now: () => new Date("2026-10-08T10:00:00.000Z"), log });
+  expect(store.recentRuns(10).map((r) => [r.job, r.ok, r.reason])).toEqual([
+    ["backfill:tokens", false, "progress unreadable"],
+    ["backfill:codex", false, "progress unreadable"],
+  ]);
   store.close();
 });
 
