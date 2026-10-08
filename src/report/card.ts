@@ -6,6 +6,7 @@ import { type Report, WEEK_MS, type WeekOverage } from "./build.ts";
 import { clip, duration, escapeHtml as e, percent } from "./format.ts";
 import type { Suggestions } from "./suggestions.ts";
 import { fitTelegram, TELEGRAM_TEXT_LIMIT } from "./telegram.ts";
+import { dateParts } from "../dates.ts";
 
 /**
  * The Report as a compact Telegram card (Bot API `parse_mode: "HTML"`): readable in 5 seconds,
@@ -216,23 +217,20 @@ function shares(list: readonly Share[]): string {
 }
 
 function weekRange(report: Report, timeZone: string | undefined): string {
-  const parts = (iso: string) => {
-    const f = new Intl.DateTimeFormat("en-GB", { timeZone, day: "numeric", month: "short" }).formatToParts(new Date(iso));
-    return { day: f.find((p) => p.type === "day")!.value, month: f.find((p) => p.type === "month")!.value };
-  };
-  const a = parts(report.from);
-  const b = parts(report.to);
+  const a = dateParts(report.from, timeZone);
+  const b = dateParts(report.to, timeZone);
   return a.month === b.month ? `${a.day}–${b.day} ${b.month}` : `${a.day} ${a.month} – ${b.day} ${b.month}`;
 }
 
 function dayMonth(iso: string, timeZone: string | undefined): string {
-  return new Intl.DateTimeFormat("en-GB", { timeZone, day: "numeric", month: "short" }).format(new Date(iso));
+  const p = dateParts(iso, timeZone);
+  return `${p.day} ${p.month}`;
 }
 
 /** A weekday within the coming week, else a date. */
 function when(iso: string, now: string, timeZone: string | undefined): string {
   if (Date.parse(iso) - Date.parse(now) < 6 * 24 * 3_600_000) {
-    return new Intl.DateTimeFormat("en-GB", { timeZone, weekday: "short" }).format(new Date(iso));
+    return dateParts(iso, timeZone).weekday;
   }
   return dayMonth(iso, timeZone);
 }

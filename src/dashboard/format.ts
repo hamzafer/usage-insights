@@ -1,3 +1,4 @@
+import { dateParts } from "../dates.ts";
 import type { Waste } from "../window-model.ts";
 
 export interface FormatOptions {
@@ -17,13 +18,7 @@ export function formatShare(waste: Pick<Waste, "share" | "basis"> | null): strin
 
 /** "8 Oct 14:05" (24-hour), or "8 Oct" with `date`. */
 export function formatTime(iso: string, o: FormatOptions, form: "minute" | "date" = "minute"): string {
-  const f = new Intl.DateTimeFormat("en-GB", {
-    timeZone: o.timeZone,
-    day: "numeric",
-    month: "short",
-    ...(form === "minute" ? { hour: "2-digit", minute: "2-digit", hourCycle: "h23" } : {}),
-  });
-  const p = Object.fromEntries(f.formatToParts(new Date(iso)).map((x) => [x.type, x.value]));
+  const p = dateParts(iso, o.timeZone);
   return form === "minute" ? `${p.day} ${p.month} ${p.hour}:${p.minute}` : `${p.day} ${p.month}`;
 }
 
