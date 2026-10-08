@@ -1,0 +1,78 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`numbers section 1`] = `
+"## Numbers
+
+Week: 2026-10-05 09:00 to 2026-10-12 09:00
+
+### Waste of Cycles that reset this week
+
+| Provider | Cycle | Reset | Waste |
+|---|---|---|---|
+| codex | Weekly | 2026-10-08 09:00 | 20% |
+
+### Pace of running Cycles
+
+| Provider | Cycle | Reset | Pace |
+|---|---|---|---|
+| codex | Weekly | 2026-10-15 09:00 | heading for Waste 21% |
+
+### Limit Hits and Blocked Time
+
+| Provider | Window | Hit | Blocked this week | Until |
+|---|---|---|---|---|
+| claude | Session | 2026-10-10 10:00 | 2h | 2026-10-10 12:00 (Reset) |
+
+### Overage
+
+- claude-work Extra usage spent: $15.00
+
+### Top Projects and models (share of tokens, all Providers)
+
+Tokens: 1M
+
+- Projects: alpha 72%, beta 20%, (other) 8%
+- Models: claude-sonnet 68%, claude-opus 20%, gpt-5-codex 12%
+
+### Trend vs the previous 4 weeks
+
+- Waste codex Weekly: 20% (before: 40% over 2 Cycles)
+- Limit Hits: 1 (before: avg 0 over 3 weeks)
+- Blocked Time: 2h (before: avg 0m over 3 weeks)
+- Tokens: 1M (before: avg 133k over 3 weeks)
+
+### Data coverage
+
+- claude: 4 readings this week, unknown (no readings) 6d 23h 55m
+- claude-work: 2 readings this week, unknown (no readings) 7d
+- codex: 4 readings this week, unknown (no readings) 7d
+- Recorder gaps this week: 1"
+`;
+
+exports[`Telegram message 1`] = `
+"Usage Insights Report
+2026-10-05 to 2026-10-12
+
+Waste (Cycles reset this week)
+- codex Weekly: 20%
+Pace (running Cycles)
+- codex Weekly: heading for Waste 21%
+
+Limit Hits: 1, Blocked Time 2h
+Overage: claude-work $15.00
+Top Projects: alpha 72%, beta 20%, (other) 8%
+Top models: claude-sonnet 68%, claude-opus 20%, gpt-5-codex 12%
+
+Trend vs previous 4 weeks
+- Waste codex Weekly: 20% (before: 40% over 2 Cycles)
+- Limit Hits: 1 (before: avg 0 over 3 weeks)
+- Blocked Time: 2h (before: avg 0m over 3 weeks)
+- Tokens: 1M (before: avg 133k over 3 weeks)
+
+Unknown time (no readings): claude 6d 23h 55m, claude-work 7d, codex 7d, 1 recorder gaps
+
+Data notes
+- Codex Backfill failed: disk unreadable
+
+Full Report: reports/2026-10-12.md in the data directory"
+`;

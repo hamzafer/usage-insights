@@ -75,3 +75,41 @@ Uninstall (recorded data is kept):
 ```sh
 scripts/uninstall-launchd.sh
 ```
+
+## Weekly Report (Telegram)
+
+```sh
+bun run report             # Backfills, then build, save and send the Report
+bun run report --dry-run   # print the message and the full Report; send and save nothing
+bun run report --test      # prefix the message with "[TEST] "
+```
+
+A run first runs the Codex and token Backfills (a failure is logged and noted in the Report),
+then builds the Report for the 7 days before now: final Waste of every Cycle that reset, Pace of
+running Cycles, Limit Hits and Blocked Time, Overage, top Projects and models, the trend vs the
+previous 4 weeks, and time without readings (shown as unknown, never as zero). The full Report is
+saved as `reports/YYYY-MM-DD.md` in the data directory; a short plain-text message goes to
+Telegram. If building fails, the message is "Usage Insights Report failed: <reason>".
+
+Telegram reuses the bot of the Claude Code Telegram plugin. The token and chat id are read at
+send time from its state directory and never copied into the repo, plists or logs:
+
+| Variable | Default |
+|---|---|
+| `TELEGRAM_STATE_DIR` | `${CLAUDE_CONFIG_DIR:-~/.claude}/channels/telegram` |
+| `TELEGRAM_BOT_TOKEN` | `TELEGRAM_BOT_TOKEN` in `.env` there |
+| `USAGE_INSIGHTS_TELEGRAM_CHAT_ID` | `allowFrom[0]` in `access.json` there |
+
+Only `sendMessage` is called (the plugin owns `getUpdates`).
+
+Install it to run Mondays at 09:00 local time (a run missed while the Mac slept happens on wake):
+
+```sh
+scripts/install-report-launchd.sh "$PWD"   # add --print to see the plist without installing
+```
+
+Output goes to `report.log` in the data directory. Uninstall (saved Reports are kept):
+
+```sh
+scripts/uninstall-report-launchd.sh
+```
