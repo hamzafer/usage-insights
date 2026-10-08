@@ -87,8 +87,9 @@ describe("Sessions section", () => {
         "codex",
         "  Session  reset 2026-10-02 14:00  Waste  70%",
         "  Session  reset 2026-10-02 19:00  Waste  90%  low confidence: last reading 4h before Reset",
-        "  Idle Capacity  Weekly  reset 2026-10-08 09:00  6d 14h  94%",
-        "  Idle Capacity  Weekly  running so far          1d 12h  92%",
+        // Readings are days apart, so most of each Cycle is unknown rather than idle (ADR 0001).
+        "  Idle Capacity  Weekly  reset 2026-10-08 09:00  5m   0%  unknown 6d 13h 55m",
+        "  Idle Capacity  Weekly  running so far          5m   0%  unknown 1d 11h 55m",
       ].join("\n"),
     );
   });

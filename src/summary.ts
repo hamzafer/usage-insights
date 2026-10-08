@@ -1,10 +1,13 @@
-import { idleCapacity } from "./sessions.ts";
+import { idleCapacity, type IdleCapacityOptions } from "./sessions.ts";
 import type { Waste, Window } from "./window-model.ts";
 
 export interface SummaryOptions {
   /** IANA time zone for Reset times; the machine's local zone when omitted. */
   timeZone?: string;
 }
+
+/** Recorder gap markers make the time around them unknown rather than Idle Capacity. */
+export interface SessionsOptions extends SummaryOptions, IdleCapacityOptions {}
 
 /** Plain-text list of ended Cycles per Provider with their Waste (`bun run summary`). */
 export function formatSummary(windows: readonly Window[], options: SummaryOptions = {}): string {
@@ -54,14 +57,14 @@ function formatGap(from: string, to: string): string {
 
 /**
  * Plain-text Sessions section (`bun run summary`): Waste for every started Session that ended,
- * then Idle Capacity per Cycle, per Provider. Empty when no Session line was recorded.
- * `windows` must hold both the Sessions and the Cycles.
+ * then Idle Capacity per Cycle, per Provider, with the Cycle's unknown (gap) time when it has any.
+ * Empty when no Session line was recorded. `windows` must hold both the Sessions and the Cycles.
  */
-export function formatSessions(windows: readonly Window[], now: string | Date, options: SummaryOptions = {}): string {
+export function formatSessions(windows: readonly Window[], now: string | Date, options: SessionsOptions = {}): string {
   const providers = [...new Set(windows.filter((w) => w.role === "session").map((w) => w.provider))];
   if (providers.length === 0) return "";
 
-  const idle = idleCapacity(windows, now);
+  const idle = idleCapacity(windows, now, options);
   const time = minuteFormat(options.timeZone);
   const out = ["Sessions"];
   for (const provider of providers) {
@@ -78,7 +81,8 @@ export function formatSessions(windows: readonly Window[], now: string | Date, o
       const when = i.cycle.endedAt ? `reset ${time.format(new Date(i.cycle.endedAt))}` : "running so far";
       const duration = formatGap(i.from, new Date(Date.parse(i.from) + i.idleMs).toISOString());
       const share = `${Math.round(i.share * 100)}%`.padStart(3);
-      out.push(`  Idle Capacity  ${i.cycle.label}  ${when.padEnd(22)}  ${duration}  ${share}`);
+      const unknown = i.unknownMs > 0 ? `  unknown ${formatGap(i.from, new Date(Date.parse(i.from) + i.unknownMs).toISOString())}` : "";
+      out.push(`  Idle Capacity  ${i.cycle.label}  ${when.padEnd(22)}  ${duration}  ${share}${unknown}`);
     }
   }
   return out.join("\n");

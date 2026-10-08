@@ -26,3 +26,8 @@ test("the dashboard listens on port 6740 unless USAGE_INSIGHTS_PORT says otherwi
   expect(loadConfig({ USAGE_INSIGHTS_PORT: "7001" }, "/home/someone").dashboardPort).toBe(7001);
   expect(() => loadConfig({ USAGE_INSIGHTS_PORT: "web" }, "/home/someone")).toThrow("USAGE_INSIGHTS_PORT");
 });
+
+test("Codex session logs: ~/.codex/sessions unless USAGE_INSIGHTS_CODEX_DIR says otherwise", () => {
+  expect(loadConfig({}, "/home/someone").codexSessionsDir).toBe("/home/someone/.codex/sessions");
+  expect(loadConfig({ USAGE_INSIGHTS_CODEX_DIR: "/tmp/codex" }, "/home/someone").codexSessionsDir).toBe("/tmp/codex");
+});

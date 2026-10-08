@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openStore } from "../src/store.ts";
@@ -117,17 +117,67 @@ describe("summary", () => {
       { ...session, used: 60, resetsAt: "2026-01-05T15:00:00.000Z", fetchedAt: "2026-01-05T14:50:00.000Z" },
       { ...session, used: 0, resetsAt: null, fetchedAt: "2026-01-06T10:00:00.000Z" },
     ]);
+    // A recorder run that failed between the two readings around the Reset.
+    store.saveGap({ recordedAt: "2026-01-08T08:55:00.000Z", reason: "OpenUsage unreachable" });
     store.close();
 
     const summary = run("src/cli/summary.ts", deadUrl, { TZ: "UTC" });
     expect(summary.code).toBe(0);
     expect(summary.out).toContain("\n\nSessions\ncodex\n  Session  reset 2026-01-05 15:00  Waste  40%\n");
-    expect(summary.out).toContain("  Idle Capacity  Weekly  reset 2026-01-08 09:00  6d 19h  97%\n");
+    // Only the Session's 5 hours are known; the rest of the Cycle is unknown, not idle.
+    expect(summary.out).toContain("  Idle Capacity  Weekly  reset 2026-01-08 09:00  0m   0%  unknown 6d 19h\n");
   });
 
   test("with nothing recorded it says no Cycle has ended", () => {
     const summary = run("src/cli/summary.ts", deadUrl);
     expect(summary.code).toBe(0);
     expect(summary.out).toContain("No ended Cycles yet.");
+  });
+});
+
+describe("backfill:codex", () => {
+  test("rebuilds past Codex Cycles from session logs so summary shows their Waste, and reruns add nothing", () => {
+    // Synthetic log: a Weekly Cycle ending 2026-01-08 09:00 UTC at 70% used, then a new one.
+    const codexDir = join(dataDir, "codex-sessions");
+    const day = join(codexDir, "2026", "01", "08");
+    mkdirSync(day, { recursive: true });
+    const line = (at: string, used: number, resetIso: string) =>
+      JSON.stringify({
+        timestamp: at,
+        type: "event_msg",
+        payload: {
+          type: "token_count",
+          info: null,
+          rate_limits: {
+            limit_id: "codex",
+            primary: { used_percent: 5, window_minutes: 300, resets_at: Date.parse(at) / 1000 + 3600 },
+            secondary: { used_percent: used, window_minutes: 10080, resets_at: Date.parse(resetIso) / 1000 },
+            plan_type: "plus",
+          },
+        },
+      });
+    writeFileSync(
+      join(day, "rollout-2026-01-08T09-00-00-synthetic.jsonl"),
+      [
+        line("2026-01-07T10:00:00.000Z", 40, "2026-01-08T09:00:00Z"),
+        line("2026-01-08T08:50:00.000Z", 70, "2026-01-08T09:00:00Z"),
+        line("2026-01-08T09:10:00.000Z", 1, "2099-01-01T09:00:00Z"),
+      ].join("\n") + "\n",
+    );
+    const env = { USAGE_INSIGHTS_CODEX_DIR: codexDir, TZ: "UTC" };
+
+    const first = run("src/cli/backfill-codex.ts", deadUrl, env);
+    expect(first.code).toBe(0);
+    expect(first.out).toContain("1 log files, 3 new lines, 6 readings stored");
+    expect(run("src/cli/backfill-codex.ts", deadUrl, env).out).toContain("1 log files, 0 new lines, 0 readings stored");
+
+    const summary = run("src/cli/summary.ts", deadUrl, env);
+    expect(summary.out).toStartWith("codex\n  Weekly  reset 2026-01-08 09:00  Waste  30%\n");
+  });
+
+  test("with no Codex logs it stores nothing and says so", () => {
+    const out = run("src/cli/backfill-codex.ts", deadUrl, { USAGE_INSIGHTS_CODEX_DIR: join(dataDir, "missing") });
+    expect(out.code).toBe(0);
+    expect(out.out).toContain("0 log files");
   });
 });

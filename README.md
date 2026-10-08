@@ -16,6 +16,7 @@ bun install
 bun run record   # one recording run: a Snapshot of every Provider, or a gap if OpenUsage is down
 bun run status   # latest reading per Provider and line, plus recent gaps
 bun run summary  # ended Cycles per Provider with their Waste ("low confidence" if readings were sparse)
+bun run backfill:codex  # past Codex readings from ~/.codex/sessions (Measured); rerun anytime, reads only new lines
 bun test
 bunx tsc --noEmit
 ```
@@ -29,6 +30,7 @@ Recorded data never lives in the repo (ADR 0002). It goes to
 |---|---|
 | `USAGE_INSIGHTS_DATA_DIR` | `~/Library/Application Support/usage-insights` |
 | `USAGE_INSIGHTS_OPENUSAGE_URL` | `http://127.0.0.1:6736/v1/usage` |
+| `USAGE_INSIGHTS_CODEX_DIR` | `~/.codex/sessions` |
 
 ## Background recording (launchd)
 
