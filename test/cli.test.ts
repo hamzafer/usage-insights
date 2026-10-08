@@ -83,6 +83,32 @@ describe("summary", () => {
     expect(summary.out).toBe("codex\n  Weekly  reset 2026-01-08 09:00  Waste  25%\n");
   });
 
+  test("adds a Sessions section with Session Waste and Idle Capacity", () => {
+    const store = openStore(join(dataDir, "usage.db"));
+    const line = {
+      provider: "codex",
+      limit: 100,
+      unit: "percent",
+      plan: null,
+      recordedAt: "2026-01-05T10:00:05.000Z",
+    };
+    const weekly = { ...line, label: "Weekly", role: "cycle" as const, periodMs: 604_800_000 };
+    const session = { ...line, label: "Session", role: "session" as const, periodMs: 18_000_000 };
+    store.saveReadings([
+      { ...weekly, used: 20, resetsAt: "2026-01-08T09:00:00.000Z", fetchedAt: "2026-01-01T09:00:00.000Z" },
+      { ...weekly, used: 75, resetsAt: "2026-01-08T09:00:00.000Z", fetchedAt: "2026-01-08T08:50:00.000Z" },
+      { ...weekly, used: 0, resetsAt: "2099-01-01T09:00:00.000Z", fetchedAt: "2026-01-08T09:05:00.000Z" },
+      { ...session, used: 60, resetsAt: "2026-01-05T15:00:00.000Z", fetchedAt: "2026-01-05T14:50:00.000Z" },
+      { ...session, used: 0, resetsAt: null, fetchedAt: "2026-01-06T10:00:00.000Z" },
+    ]);
+    store.close();
+
+    const summary = run("src/cli/summary.ts", deadUrl, { TZ: "UTC" });
+    expect(summary.code).toBe(0);
+    expect(summary.out).toContain("\n\nSessions\ncodex\n  Session  reset 2026-01-05 15:00  Waste  40%\n");
+    expect(summary.out).toContain("  Idle Capacity  Weekly  reset 2026-01-08 09:00  6d 19h  97%\n");
+  });
+
   test("with nothing recorded it says no Cycle has ended", () => {
     const summary = run("src/cli/summary.ts", deadUrl);
     expect(summary.code).toBe(0);

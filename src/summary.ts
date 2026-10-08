@@ -1,3 +1,4 @@
+import { idleCapacity } from "./sessions.ts";
 import type { Waste, Window } from "./window-model.ts";
 
 export interface SummaryOptions {
@@ -49,4 +50,48 @@ function formatGap(from: string, to: string): string {
   const hours = Math.floor((minutes % 1440) / 60);
   const mins = minutes % 60;
   return [days && `${days}d`, hours && `${hours}h`, mins && `${mins}m`].filter(Boolean).join(" ") || "0m";
+}
+
+/**
+ * Plain-text Sessions section (`bun run summary`): Waste for every started Session that ended,
+ * then Idle Capacity per Cycle, per Provider. Empty when no Session line was recorded.
+ * `windows` must hold both the Sessions and the Cycles.
+ */
+export function formatSessions(windows: readonly Window[], now: string | Date, options: SummaryOptions = {}): string {
+  const providers = [...new Set(windows.filter((w) => w.role === "session").map((w) => w.provider))];
+  if (providers.length === 0) return "";
+
+  const idle = idleCapacity(windows, now);
+  const time = minuteFormat(options.timeZone);
+  const out = ["Sessions"];
+  for (const provider of providers) {
+    out.push(provider);
+    const ended = windows.filter((w) => w.provider === provider && w.role === "session" && w.endedAt && w.waste);
+    for (const s of ended) {
+      const parts = [s.label, `reset ${time.format(new Date(s.endedAt!))}`, formatWaste(s.waste)];
+      if (s.waste!.lowConfidence) {
+        parts.push(`low confidence: last reading ${formatGap(s.waste!.lastReadingAt, s.endedAt!)} before Reset`);
+      }
+      out.push(`  ${parts.join("  ")}`);
+    }
+    for (const i of idle.filter((i) => i.provider === provider)) {
+      const when = i.cycle.endedAt ? `reset ${time.format(new Date(i.cycle.endedAt))}` : "running so far";
+      const duration = formatGap(i.from, new Date(Date.parse(i.from) + i.idleMs).toISOString());
+      const share = `${Math.round(i.share * 100)}%`.padStart(3);
+      out.push(`  Idle Capacity  ${i.cycle.label}  ${when.padEnd(22)}  ${duration}  ${share}`);
+    }
+  }
+  return out.join("\n");
+}
+
+function minuteFormat(timeZone: string | undefined): Intl.DateTimeFormat {
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
 }
