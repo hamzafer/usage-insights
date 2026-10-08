@@ -27,7 +27,19 @@ test("Suggestions, when given, appear in the Markdown and the Telegram message",
   expect(renderMarkdown(report, { ...options, suggestions })).toContain("## Suggestions\n\n1. Move code reviews to Codex.");
   expect(renderTelegram(report, { ...options, suggestions })).toContain("1. Move code reviews to Codex.");
   const failed = { ok: false as const, reason: "API unreachable" };
-  expect(renderMarkdown(report, { ...options, suggestions: failed })).toContain("Suggestions could not be written: API unreachable");
+  expect(renderMarkdown(report, { ...options, suggestions: failed })).toContain("Suggestions unavailable: API unreachable");
+  expect(renderTelegram(report, { ...options, suggestions: failed })).toContain("Suggestions unavailable: API unreachable");
+});
+
+test("while the Setup is a DRAFT, the Suggestions section says so", () => {
+  const draft = { ok: true as const, items: ["Move code reviews to Codex."], draftSetup: true };
+  expect(renderMarkdown(report, { ...options, suggestions: draft })).toContain(
+    "## Suggestions\n\nSetup is a DRAFT: check setup.md in the data directory and remove DRAFT from its first line.\n\n1. Move code reviews to Codex.",
+  );
+  expect(renderTelegram(report, { ...options, suggestions: draft })).toContain("Setup is a DRAFT");
+  const failedDraft = { ok: false as const, reason: "timeout", draftSetup: true };
+  expect(renderMarkdown(report, { ...options, suggestions: failedDraft })).toContain("Setup is a DRAFT");
+  expect(renderMarkdown(report, { ...options, suggestions: { ok: true, items: ["A."] } })).not.toContain("DRAFT");
 });
 
 test("Estimated Waste is marked ~, and a stepped Cycle span says its dates are inferred", () => {

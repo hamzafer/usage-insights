@@ -120,5 +120,5 @@ test("Suggestions from the extension point reach the message; a throwing provide
     },
   });
   await runReport(throwing.d);
-  expect(throwing.messenger.sent[0]).toContain("Suggestions could not be written: no key");
+  expect(throwing.messenger.sent[0]).toContain("Suggestions unavailable: no key");
 });

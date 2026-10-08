@@ -24,7 +24,7 @@ export interface RenderOptions {
 export function renderMarkdown(report: Report, options: RenderOptions = {}): string {
   const out = [`# Usage Insights Report: ${title(report, options)}`, "", renderNumbers(report, options)];
   if (options.suggestions) {
-    out.push("", "## Suggestions", "", ...suggestionLines(options.suggestions));
+    out.push("", "## Suggestions", "", ...suggestionLines(options.suggestions, true));
   }
   out.push("", "## Data notes", "");
   if (report.dataNotes.length) out.push(...report.dataNotes.map((n) => `- ${n}`));
@@ -158,11 +158,14 @@ function trendLine(name: string, t: WeekTrend, format: (n: number) => string): s
   return `${name}: ${format(t.thisWeek)} (before: ${before})`;
 }
 
-function suggestionLines(s: Suggestions): string[] {
-  if (!s.ok) return [`Suggestions could not be written: ${s.reason}`];
-  if (s.items.length === 0) return ["No Suggestions this week."];
-  return s.items.map((item, i) => `${i + 1}. ${item}`);
+function suggestionLines(s: Suggestions, markdown = false): string[] {
+  const draft = s.draftSetup ? [DRAFT_NOTE, ...(markdown ? [""] : [])] : [];
+  if (!s.ok) return [...draft, `Suggestions unavailable: ${s.reason}`];
+  if (s.items.length === 0) return [...draft, "No Suggestions this week."];
+  return [...draft, ...s.items.map((item, i) => `${i + 1}. ${item}`)];
 }
+
+const DRAFT_NOTE = "Setup is a DRAFT: check setup.md in the data directory and remove DRAFT from its first line.";
 
 function cycleWasteText(c: CycleWaste): string {
   const text = wasteText(c.waste, c.resetAt);
