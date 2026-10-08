@@ -52,6 +52,13 @@ const MIGRATIONS: string[] = [
      recorded_at TEXT NOT NULL,
      reason      TEXT NOT NULL
    );`,
+  // How far each Backfill has read each log file, so reruns only read what was appended.
+  `CREATE TABLE backfill_progress (
+     source      TEXT NOT NULL,
+     path        TEXT NOT NULL,
+     offset      INTEGER NOT NULL,
+     PRIMARY KEY (source, path)
+   );`,
 ];
 
 export interface Store {
@@ -65,6 +72,9 @@ export interface Store {
   /** The newest gaps first. */
   recentGaps(limit: number): Gap[];
   countReadings(): number;
+  /** Bytes of a log file a Backfill (`source`) has already read; 0 for a new file. */
+  backfillOffset(source: string, path: string): number;
+  saveBackfillOffset(source: string, path: string, offset: number): void;
   close(): void;
 }
 
@@ -120,6 +130,18 @@ export function openStore(path: string): Store {
         .all(limit),
     countReadings: () =>
       db.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM readings").get()?.n ?? 0,
+    backfillOffset: (source, path) =>
+      db
+        .query<{ offset: number }, [string, string]>(
+          "SELECT offset FROM backfill_progress WHERE source = ? AND path = ?",
+        )
+        .get(source, path)?.offset ?? 0,
+    saveBackfillOffset: (source, path, offset) => {
+      db.query(
+        `INSERT INTO backfill_progress (source, path, offset) VALUES (?, ?, ?)
+           ON CONFLICT (source, path) DO UPDATE SET offset = excluded.offset`,
+      ).run(source, path, offset);
+    },
     close: () => db.close(),
   };
 }

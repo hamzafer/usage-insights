@@ -1,5 +1,5 @@
 import { Glob } from "bun";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { classifyLine } from "../classify.ts";
 import type { Store, StoredReading } from "../store.ts";
@@ -19,20 +19,41 @@ export interface CodexBackfillOptions {
 }
 
 export interface CodexBackfillResult {
+  /** Session log files found. */
+  files: number;
+  /** Complete lines read by this run (only what was appended since the last run). */
+  linesRead: number;
   /** New readings stored by this run. */
   stored: number;
 }
 
+/**
+ * Reads every session log from where the last run stopped and stores its readings.
+ * Rerunnable: readings are unique per line and time, and a line still being written is left
+ * for the next run. A file that shrank (rewritten) is read again from the start.
+ */
 export function backfillCodex({ sessionsDir, store, now = new Date() }: CodexBackfillOptions): CodexBackfillResult {
   const recordedAt = now.toISOString();
-  let stored = 0;
+  const result: CodexBackfillResult = { files: 0, linesRead: 0, stored: 0 };
+  if (!existsSync(sessionsDir)) return result;
+
   for (const relative of new Glob("**/rollout-*.jsonl").scanSync({ cwd: sessionsDir, onlyFiles: true })) {
-    const text = readFileSync(join(sessionsDir, relative), "utf8");
-    const readings = text.split("\n").flatMap((line) => readingsOfLine(line, recordedAt));
-    stored += store.saveReadings(readings);
+    result.files++;
+    const bytes = readFileSync(join(sessionsDir, relative));
+    let offset = store.backfillOffset(CODEX_BACKFILL_SOURCE, relative);
+    if (offset > bytes.length) offset = 0;
+    const end = bytes.lastIndexOf(NEWLINE) + 1;
+    if (end <= offset) continue;
+
+    const lines = bytes.subarray(offset, end).toString("utf8").split("\n").slice(0, -1);
+    result.linesRead += lines.length;
+    result.stored += store.saveReadings(lines.flatMap((line) => readingsOfLine(line, recordedAt)));
+    store.saveBackfillOffset(CODEX_BACKFILL_SOURCE, relative, end);
   }
-  return { stored };
+  return result;
 }
+
+const NEWLINE = 0x0a;
 
 interface RateWindow {
   used_percent?: unknown;

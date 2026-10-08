@@ -85,6 +85,29 @@ test("token_count rate limits become Session and Weekly readings with a backfill
   ]);
 });
 
+test("a rerun reads only what was appended since, and finishes a line that was still being written", () => {
+  const path = writeLog(LOG, [sessionMeta("2026-10-08T10:00:00.000Z"), tokenCount("2026-10-08T10:00:05.000Z", session(12), weekly(34))]);
+  const half = tokenCount("2026-10-08T10:05:00.000Z", session(15), weekly(35));
+  appendFileSync(path, half.slice(0, 40));
+
+  expect(backfillCodex({ sessionsDir, store, now: NOW })).toEqual({ files: 1, linesRead: 2, stored: 2 });
+  expect(backfillCodex({ sessionsDir, store, now: NOW })).toEqual({ files: 1, linesRead: 0, stored: 0 });
+
+  appendFileSync(path, `${half.slice(40)}\n`);
+  writeLog("2026/10/08/rollout-2026-10-08T13-00-00-b.jsonl", [tokenCount("2026-10-08T11:00:00.000Z", session(20), weekly(36))]);
+  expect(backfillCodex({ sessionsDir, store, now: NOW })).toEqual({ files: 2, linesRead: 2, stored: 4 });
+  expect(store.readingsWithRole(["cycle"]).map((r) => r.used)).toEqual([34, 35, 36]);
+});
+
+test("the same readings logged twice (sub-agent logs, reruns) are stored once", () => {
+  const line = tokenCount("2026-10-08T10:00:05.000Z", session(12), weekly(34));
+  writeLog(LOG, [line, line]);
+  writeLog("2026/10/08/rollout-2026-10-08T12-00-01-subagent.jsonl", [line]);
+
+  expect(backfillCodex({ sessionsDir, store, now: NOW }).stored).toBe(2);
+  expect(store.countReadings()).toBe(2);
+});
+
 test("skips lines it cannot measure: no Reset (2025), no windows, other limits, broken JSON", () => {
   writeLog("2025/10/02/rollout-2025-10-02T13-00-00-a.jsonl", [
     sessionMeta("2025-10-02T11:00:00.000Z"),
