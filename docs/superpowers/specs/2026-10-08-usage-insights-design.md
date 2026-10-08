@@ -1,6 +1,6 @@
 # Usage Insights: design
 
-Status: draft for review (2026-10-08). Vocabulary follows `CONTEXT.md`; decisions in `docs/adr/`.
+Status: draft for review (2026-10-08). Vocabulary follows `GLOSSARY.md`; decisions in `docs/adr/`.
 
 ## Goal
 
@@ -112,7 +112,7 @@ Turns stored readings into **Windows** and their results. No I/O, fully unit-tes
 ### 6. Report, Suggestions, Telegram
 
 - launchd runs it Mondays at 09:00 local time.
-- Content (per `CONTEXT.md`): final Waste for every Cycle that reset in the past 7 days, Pace for
+- Content (per `GLOSSARY.md`): final Waste for every Cycle that reset in the past 7 days, Pace for
   running Cycles, Limit Hits and Blocked Time, Overage, top Projects and models, trends vs the
   previous 4 weeks.
 - **Suggestions**: the computed numbers plus `setup.md` go to Claude using the personal API key
