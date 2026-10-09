@@ -37,7 +37,7 @@ export function ProviderTabs({
         ) : null}
         {providers.map((p) => (
           <TabsTrigger key={p} value={p} className="flex-none gap-2 px-2.5 text-[13px]">
-            <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ backgroundColor: providerColor(p) }} />
+            <span aria-hidden className="size-2 shrink-0 rounded-[2px]" style={{ backgroundColor: providerColor(p) }} />
             {providerName(p)}
           </TabsTrigger>
         ))}
