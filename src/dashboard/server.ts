@@ -1,3 +1,4 @@
+import { buildHero } from "./hero.ts";
 import { renderHealth, renderHistory, renderMessage, renderOverview, renderProjects, type PageContext } from "./render.ts";
 import { hasExport, serveStatic, staticNotFound } from "./static.ts";
 import { buildHealth, buildHistory, buildOverview, buildProjects, type DashboardData } from "./view-model.ts";
@@ -79,6 +80,12 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
     if (path === "/api/health") return json(buildHealth(data, at));
     if (path === "/projects") return html(renderProjects(buildProjects(data, at), ctx));
     if (path === "/api/projects") return json(buildProjects(data, at));
+    const hero = /^\/api\/hero\/([^/]+)$/.exec(path)?.[1];
+    if (hero !== undefined) {
+      const id = decodePathPart(hero);
+      const result = id === null ? null : buildHero(data, id, at, url.searchParams.get("label") ?? undefined);
+      return result ? json(result) : json({ error: "No Cycle recorded for this Provider" }, 404);
+    }
     if (provider !== undefined) {
       const id = decodePathPart(provider);
       const history = id === null ? null : buildHistory(data, id, at);
