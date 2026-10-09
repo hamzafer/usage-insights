@@ -157,7 +157,7 @@ describe("GET /api/sessions/top", () => {
     store.saveTokenEvents([
       keyed(call("codex", "c1", "2026-10-08T10:00:00.000Z", 400, { model: "gpt-x" }), "k1"),
       keyed(call("codex", "c1", "2026-10-08T11:00:00.000Z", 400, { model: "gpt-x" }), "k2"),
-      keyed(call("claude", "s1", "2026-10-02T10:00:00.000Z", 300), "k3"),
+      keyed(call("claude", "s1", "2026-10-02T10:00:00.000Z", 300, { model: "claude-opus-5-5" }), "k3"),
       keyed(call("claude", "s2", "2026-09-20T10:00:00.000Z", 900), "k4"),
     ]);
     store.saveReadings(
@@ -188,6 +188,8 @@ describe("GET /api/sessions/top", () => {
     expect(codex.sessionShare).toBeCloseTo(0.12);
     expect(codex.weeklyShare).toBeCloseTo(0.03);
     expect(claude).toMatchObject({ provider: "claude", tokens: 300, sessionShare: null, weeklyShare: null, basis: null });
+    // The display name, as Tokens by model shows it (the id goes in the tooltip).
+    expect(claude).toMatchObject({ model: "claude-opus-5-5", modelName: "Opus 5.5" });
     // Never the full path of a Project.
     expect(JSON.stringify(body)).not.toContain("/code/");
   });
@@ -196,6 +198,21 @@ describe("GET /api/sessions/top", () => {
     seed();
     expect((await get("/api/sessions/top?range=30d")).body.sessions).toHaveLength(3);
     expect((await get("/api/sessions/top?range=30d&limit=1")).body.sessions.map((s: any) => s.tokens)).toEqual([900]);
+  });
+
+  test("provider keeps one Provider's sessions; providers lists every Provider in the range", async () => {
+    seed();
+    const all = (await get("/api/sessions/top?range=30d")).body;
+    expect(all.provider).toBeNull();
+    expect(all.providers).toEqual(["claude", "codex"]);
+    const codex = (await get("/api/sessions/top?range=30d&provider=codex")).body;
+    expect(codex.provider).toBe("codex");
+    expect(codex.sessions.map((s: any) => s.provider)).toEqual(["codex"]);
+    // The limit applies within the Provider: Claude's bigger sessions never crowd Codex out.
+    expect((await get("/api/sessions/top?range=30d&limit=1&provider=codex")).body.sessions.map((s: any) => s.tokens)).toEqual([800]);
+    expect((await get("/api/sessions/top?range=7d&provider=claude")).body.providers).toEqual(["claude", "codex"]);
+    expect((await get("/api/sessions/top?range=7d&provider=nobody")).body.sessions).toEqual([]);
+    expect((await get("/api/sessions/top?provider=%2Fetc")).status).toBe(400);
   });
 
   test("defaults to 7d; a bad range or limit is a 400", async () => {

@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import type { AnalyticsSectionProps } from "@/components/analytics/types";
+import { ALL_PROVIDERS, ProviderTabs } from "@/components/provider-tabs";
 import { Section } from "@/components/section";
 import { ApiErrorState, EmptyState } from "@/components/states";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useApi } from "@/hooks/use-api";
 import { api } from "@/lib/api";
-import { providerColor, providerName } from "@/lib/providers";
+import { byProviderOrder, providerColor, providerName } from "@/lib/providers";
 import { compactTokens, limitText, sessionDuration, sessionStart } from "@/lib/top-sessions";
 import type { TopSession } from "@/lib/types";
 
@@ -18,13 +19,20 @@ const RANGE_TEXT: Record<string, string> = { "7d": "7 days", "30d": "30 days" };
 /**
  * Top sessions (#21): the range's biggest Claude Code and Codex sessions by tokens, with how much
  * of the 5-hour and weekly limits each took (`GET /api/sessions/top?range=`). Codex is Measured from
- * its logs; Claude is "~" once its calibration is ready, "—" until then.
+ * its logs; Claude is "~" once its calibration is ready, "—" until then. Provider tabs (All first)
+ * ask the API for one Provider's top sessions, so Codex's Measured sessions are not crowded out by
+ * Claude's cache-heavy token counts.
  */
 export function TopSessions({ range }: AnalyticsSectionProps) {
-  const load = useCallback((init?: RequestInit) => api.topSessions(range, init), [range]);
+  const [picked, setPicked] = useState<string>(ALL_PROVIDERS);
+  const provider = picked === ALL_PROVIDERS ? undefined : picked;
+  const load = useCallback((init?: RequestInit) => api.topSessions(range, provider, init), [range, provider]);
   const state = useApi(load);
   const title = "Top sessions";
   const description = `The biggest sessions of the last ${RANGE_TEXT[range] ?? range}, by tokens.`;
+  const providers = state.status === "ready" ? state.data.providers.toSorted(byProviderOrder) : [];
+  const tabs =
+    providers.length > 1 ? <ProviderTabs all providers={providers} value={picked} onChange={setPicked} /> : null;
 
   if (state.status === "error") {
     return (
@@ -46,7 +54,7 @@ export function TopSessions({ range }: AnalyticsSectionProps) {
   }
 
   const { sessions } = state.data;
-  if (sessions.length === 0) {
+  if (sessions.length === 0 && provider === undefined) {
     return (
       <Section title={title} description={description}>
         <EmptyState title="No sessions in this range">
@@ -60,23 +68,28 @@ export function TopSessions({ range }: AnalyticsSectionProps) {
   const tokensOnly = sessions.some((s) => s.basis === null && s.provider !== "codex");
   return (
     <Section title={title} description={description}>
-      <Table className="min-w-[720px]">
-        <TableHeader>
-          <TableRow className="hover:bg-transparent">
-            <TableHead className="pl-0">Session</TableHead>
-            <TableHead>Plan</TableHead>
-            <TableHead>Model</TableHead>
-            <TableHead className="text-right">Tokens</TableHead>
-            <TableHead className="w-32 text-right">5-hour limit</TableHead>
-            <TableHead className="w-32 pr-0 text-right">Weekly limit</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sessions.map((s) => (
-            <SessionRow key={`${s.provider}/${s.id}`} session={s} />
-          ))}
-        </TableBody>
-      </Table>
+      {tabs ? <div className="mb-4">{tabs}</div> : null}
+      {sessions.length === 0 ? (
+        <p className="py-10 text-center text-[13px] text-muted-foreground">No {providerName(picked)} sessions in this range.</p>
+      ) : (
+        <Table className="min-w-[720px]">
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="pl-0">Session</TableHead>
+              <TableHead>Plan</TableHead>
+              <TableHead>Model</TableHead>
+              <TableHead className="text-right">Tokens</TableHead>
+              <TableHead className="w-32 text-right">5-hour limit</TableHead>
+              <TableHead className="w-32 pr-0 text-right">Weekly limit</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sessions.map((s) => (
+              <SessionRow key={`${s.provider}/${s.id}`} session={s} />
+            ))}
+          </TableBody>
+        </Table>
+      )}
       <p className="mt-3 max-w-prose text-xs text-muted-foreground">
         Codex limits are Measured from its logs: how far each limit moved while the session ran (sessions at the
         same time share it). Claude&apos;s are estimated from tokens (~)
@@ -103,8 +116,8 @@ function SessionRow({ session: s }: { session: TopSession }) {
           {providerName(s.provider)}
         </span>
       </TableCell>
-      <TableCell className="max-w-44 truncate font-mono text-xs text-muted-foreground" title={s.model}>
-        {s.model}
+      <TableCell className="max-w-44 truncate text-muted-foreground" title={s.model}>
+        {s.modelName}
       </TableCell>
       <TableCell className="text-right font-mono tabular-nums" title={`${s.tokens.toLocaleString("en-US")} tokens in ${s.calls} calls`}>
         {compactTokens(s.tokens)}

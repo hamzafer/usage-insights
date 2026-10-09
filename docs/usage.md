@@ -40,38 +40,58 @@ Recorded data never lives in the repo (ADR 0002). It goes to
 bun run dashboard   # then open http://127.0.0.1:6740
 ```
 
-It listens on `127.0.0.1` only (ADR 0002) and reads the data directory on every page load, so
-reload for new Snapshots.
+![Overview (sample data)](images/dashboard.png)
+
+It listens on `127.0.0.1` only (ADR 0002), refuses other Host names (DNS rebinding), and reads
+the data directory on every request, so reload for new Snapshots.
 
 The dashboard is a Next.js app in `web/`, built as a static export (`web/out`, ADR 0003) and
 served by the same Bun process as the JSON API. `bun run dashboard` builds it first when
 `web/out` is missing or older than any file in `web/` (it installs `web/`'s dependencies on the
 first build); when it is up to date this is a few file checks. `bun run dashboard --no-build`
-skips the check. Without a built export, `/` shows the old overview.
+skips the check. Without a built export, pages answer with how to build it
+(`bun run web:build`); the API still works.
 
-- **Overview** (`/`): one plan tile per Provider: the running Cycle's % used, a meter with a tick
-  at how far through the Cycle it is, the status dot (the same rule as the Telegram card), a short
-  Pace line and the change vs the last Cycle at the same point.
-- **Analytics** (`/analytics`): sections arrive with the redesign tickets.
+### Overview (`/`)
 
-Developing the app: run `bun run dashboard` (the API) and `bun run web:dev` (`next dev`, which
-proxies `/api/*` to it). `bun run web:build` builds the export by hand.
+- **Plan tiles**, one per Provider: the running Cycle's % used, a meter with a tick at how far
+  through the Cycle it is, the status dot and label (the same rule as the Telegram card), a short
+  Pace line and the change vs the last Cycle at the same point. Click a tile to chart it.
+- **Cycle chart**: the picked plan's running Cycle, used so far, the Pace line to the Reset, and
+  time without readings hatched (never drawn as zero). Chart or table view.
 
-The old server-rendered pages stay until the new app covers them:
+### Analytics (`/analytics`)
 
-- **Overview** (`/legacy`): per Provider, the running Cycle's usage and Pace, the last Cycle's Waste,
-  Limit Hits and Blocked Time over 28 days, Overage, and Waste of the last few Cycles.
-- **History** (`/provider/<id>`): Waste per Cycle and per started Session over time, and Idle
-  Capacity per Cycle.
-- **Projects and models** (`/projects`): token share per Project (a git repository, worktrees
-  and subfolders merged; shown by folder name only) and per model for each Provider's last Cycles.
-  Cycles before the first recorded Reset are stepped back in weeks and marked "dates inferred".
-- **Data health** (`/health`): last Snapshot per Provider, unclassified lines, recorder gaps,
-  failed Backfill and Report runs, and stretches without Snapshots.
+![Analytics (sample data)](images/dashboard-analytics.png)
 
-Estimated values are marked `~` and hatched, low-confidence Waste is flagged, and time without
-Snapshots is hatched as unknown, never drawn as zero. The same data is served as JSON under
-`/api/overview`, `/api/provider/<id>`, `/api/projects` and `/api/health`.
+One range toggle (7d / 30d) above every section. Provider tabs pick a plan in each section.
+
+- **Projects and models**: where a Provider's tokens went, ranked (folder names only, never paths).
+- **Tokens by model**: tokens per day, one line per model, with All or one Provider.
+- **Waste and Limit history**: used vs wasted per Cycle at its Reset, Limit Hits marked.
+  Estimated Cycles are hatched and marked `~`; low-confidence ones (last reading over 30 minutes
+  before the Reset) are drawn lighter and say why in the tooltip and table.
+- **Top sessions**: the biggest sessions by tokens, with their share of the 5-hour and weekly
+  limits (Codex Measured from its logs, Claude `~` once calibrated). The Codex tab lists Codex's
+  own top sessions, so Claude's larger token counts never crowd them out.
+
+### Data health
+
+The pill in the header says **Recording**, **N gaps today** or **Run failed** (a Backfill or
+Report run failed in the last 24 hours), always with a dot and a label. Click it for the details:
+the last Snapshot per Provider, failed runs, recorder gaps, unclassified lines and the Claude
+calibration (samples so far, tokens per 1% once ready).
+
+### JSON API
+
+`/api/overview`, `/api/health`, `/api/hero/<provider>`, `/api/history/<provider>`,
+`/api/provider/<id>`, `/api/projects?range=`, `/api/tokens/daily?range=` and
+`/api/sessions/top?range=&provider=&limit=`.
+
+### Developing the app
+
+Run `bun run dashboard` (the API) and `bun run web:dev` (`next dev`, which proxies `/api/*` to
+it), then open the `next dev` address. `bun run web:build` builds the export by hand.
 
 ## Background recording (launchd)
 

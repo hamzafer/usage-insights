@@ -36,47 +36,35 @@ async function get(path: string, method = "GET") {
   return { status: res.status, type: res.headers.get("content-type") ?? "", body: await res.text() };
 }
 
-describe("pages", () => {
-  test("overview shows each Provider's last Cycle Waste, Limit Hits and Overage", async () => {
+describe("API", () => {
+  test("overview has each Provider's last Cycle Waste, Limit Hits and Overage", async () => {
     seed();
-    const res = await get("/");
+    const res = await get("/api/overview");
     expect(res.status).toBe(200);
-    expect(res.type).toContain("text/html");
-    expect(res.body).toContain("Codex");
-    expect(res.body).toContain("30%"); // last Cycle Waste
-    expect(res.body).toContain("15 credits"); // Overage in its own unit
-    expect(res.body).toContain("blocked 1h in total");
-    expect(res.body).toContain("Pace: heading for");
+    const [codex] = JSON.parse(res.body).providers;
+    expect(codex.provider).toBe("codex");
+    expect(codex.lastCycles[0].waste.share).toBeCloseTo(0.3);
+    expect(codex.limitHits.count).toBeGreaterThan(0);
+    expect(codex.overage.length).toBeGreaterThan(0);
   });
 
-  test("overview flags data problems and links to data health", async () => {
+  test("overview of an empty data directory has no Providers", async () => {
+    const res = await get("/api/overview");
+    expect(res.status).toBe(200);
+    expect(JSON.parse(res.body).providers).toEqual([]);
+  });
+
+  test("Provider history has Cycles, Sessions, Idle Capacity and gaps; unknown is a 404", async () => {
     seed();
-    const { body } = await get("/");
-    expect(body).toContain("1 unclassified line");
-    expect(body).toContain('href="/health"');
+    const history = JSON.parse((await get("/api/provider/codex")).body);
+    expect(history.cycles).toHaveLength(1);
+    expect(history.sessions.length).toBeGreaterThan(0);
+    expect(history.idle.length).toBeGreaterThan(0);
+    expect(history.gaps.length).toBeGreaterThan(0);
+    expect((await get("/api/provider/nobody")).status).toBe(404);
   });
 
-  test("overview of an empty data directory explains how to start recording", async () => {
-    const res = await get("/");
-    expect(res.status).toBe(200);
-    expect(res.body).toContain("No Cycles recorded yet");
-  });
-
-  test("Provider history shows Waste per Cycle and Session, Idle Capacity and gaps", async () => {
-    seed();
-    const res = await get("/provider/codex");
-    expect(res.status).toBe(200);
-    expect(res.body).toContain("Waste per Cycle");
-    expect(res.body).toContain("Waste per Session");
-    expect(res.body).toContain("Idle Capacity per Cycle");
-    expect(res.body).toContain('class="gap"');
-    expect(res.body).toContain("No Snapshots 25 Sep 00:00 to 30 Sep 23:50");
-    // Time without readings is shown as unknown next to Idle Capacity, never as idle.
-    expect(res.body).toContain("unknown (no readings) 91%");
-    expect(res.body).toContain("<td>4d 2h</td>");
-  });
-
-  test("data health shows Claude calibration: calibrating, with samples and what it still needs", async () => {
+  test("data health has Claude calibration: calibrating, with samples", async () => {
     seed();
     const store = openStore(dbPath);
     store.saveReadings([
@@ -86,16 +74,11 @@ describe("pages", () => {
     store.saveTokenEvents([{ key: "c", ...tokenEvent("claude", "2026-10-05T10:30:00.000Z", null, "claude-opus-5", 5_000) }]);
     store.close();
 
-    const res = await get("/health");
-    expect(res.body).toContain("Claude calibration");
-    expect(res.body).toContain("calibrating");
-    expect(res.body).toContain("1 of 10");
-    expect(res.body).toContain("tokens only");
     const api = JSON.parse((await get("/api/health")).body);
     expect(api.calibration.find((c: { role: string }) => c.role === "cycle")).toMatchObject({ provider: "claude", samples: 1, ready: false });
   });
 
-  test("Projects and models shows token share per Cycle by folder name, never full paths", async () => {
+  test("Projects and models are by folder name, never full paths", async () => {
     seed();
     const store = openStore(dbPath);
     store.saveTokenEvents([
@@ -104,46 +87,13 @@ describe("pages", () => {
     ]);
     store.close();
 
-    const res = await get("/projects");
-    expect(res.status).toBe(200);
-    expect(res.body).toContain("Projects and models");
-    expect(res.body).toContain("alpha");
-    expect(res.body).toContain("(other)");
-    expect(res.body).toContain("gpt-6-astra");
-    expect(res.body).toContain("75%");
-    expect(res.body).toContain('href="/projects" aria-current="page"');
-    expect(res.body).not.toContain("/private/place");
-
     const api = await get("/api/projects");
     expect(api.type).toContain("application/json");
     expect(JSON.parse(api.body).providers[0].cycles[0].byProject[0]).toEqual({ name: "alpha", tokens: 300, share: 0.75 });
     expect(api.body).not.toContain("/private/place");
   });
 
-  test("Projects and models without token data says how to read the logs", async () => {
-    seed();
-    const res = await get("/projects");
-    expect(res.status).toBe(200);
-    expect(res.body).toContain("bun run backfill:tokens");
-  });
-
-  test("an unknown Provider is a 404 page", async () => {
-    seed();
-    const res = await get("/provider/nobody");
-    expect(res.status).toBe(404);
-    expect(res.body).toContain("No data for this Provider");
-  });
-
-  test("data health lists unclassified lines, recorder gaps and last Snapshots", async () => {
-    seed();
-    const res = await get("/health");
-    expect(res.status).toBe(200);
-    expect(res.body).toContain("Mystery meter");
-    expect(res.body).toContain("OpenUsage unreachable");
-    expect(res.body).toContain("5 Oct 11:55");
-  });
-
-  test("data health lists failed Backfill and Report runs with their reason; the overview flags recent ones", async () => {
+  test("data health lists unclassified lines, recorder gaps, last Snapshots and failed runs", async () => {
     seed();
     const store = openStore(dbPath);
     store.saveRun({ job: "backfill:codex", at: "2026-10-05T09:00:00.000Z", ok: false, reason: "sessions dir unreadable" });
@@ -151,32 +101,17 @@ describe("pages", () => {
     store.saveRun({ job: "report", at: "2026-10-05T10:00:00.000Z", ok: false, reason: "Telegram send failed (HTTP 401)" });
     store.close();
 
-    const res = await get("/health");
-    expect(res.body).toContain("Failed runs");
-    expect(res.body).toContain("Codex Backfill");
-    expect(res.body).toContain("sessions dir unreadable");
-    expect(res.body).toContain("Telegram send failed (HTTP 401)");
     const api = JSON.parse((await get("/api/health")).body);
+    expect(api.unclassified).toEqual([expect.objectContaining({ provider: "cursor", label: "Mystery meter" })]);
+    expect(api.recorderGaps.some((g: { reason: string }) => g.reason.includes("OpenUsage unreachable"))).toBe(true);
+    expect(api.providers.find((p: { provider: string }) => p.provider === "codex").lastSnapshotAt).not.toBeNull();
     expect(api.failedRuns.map((r: { job: string }) => r.job)).toEqual(["report", "backfill:codex"]);
-    expect((await get("/")).body).toContain("2 failed Backfill or Report runs in the last 24 hours");
-  });
-
-  test("Estimated Waste is marked ~", async () => {
-    // Claude Backfill readings, straight from the fixture (the store write path for them is #5's).
-    const readings = syntheticReadings().filter((r) => r.provider === "claude");
-    const data = { readings, latest: [], gaps: [] };
-    const res = await dashboardHandler({ load: () => data, now: () => new Date(NOW), timeZone: "UTC" })(
-      new Request("http://127.0.0.1/"),
-    );
-    const body = await res.text();
-    expect(body).toContain("~45%");
-    expect(body).toContain("low confidence");
   });
 
   test("a Provider path that is not valid percent-encoding is a 404, not a crash", async () => {
     seed();
-    expect((await get("/provider/%E0%A4%A")).status).toBe(404);
     expect((await get("/api/provider/%")).status).toBe(404);
+    expect((await get("/api/hero/%E0%A4%A")).status).toBe(404);
   });
 
   test("requests for another host name or port are refused (DNS rebinding)", async () => {
@@ -191,12 +126,12 @@ describe("pages", () => {
     expect(await status("localhost")).toBe(403);
   });
 
-  test("unknown paths are 404 and other methods are 405", async () => {
-    expect((await get("/nope")).status).toBe(404);
-    expect((await get("/", "POST")).status).toBe(405);
+  test("unknown API paths are 404 and other methods are 405", async () => {
+    expect((await get("/api/nope")).status).toBe(404);
+    expect((await get("/api/overview", "POST")).status).toBe(405);
   });
 
-  test("a failing data load is a loud 500, not an empty page", async () => {
+  test("a failing data load is a loud 500, not an empty response", async () => {
     const failing = dashboardHandler({
       load: () => {
         throw new Error("database is locked");
@@ -204,9 +139,18 @@ describe("pages", () => {
       now: () => new Date(NOW),
       log: () => {},
     });
-    const res = await failing(new Request("http://127.0.0.1/"));
+    const res = await failing(new Request("http://127.0.0.1/api/overview"));
     expect(res.status).toBe(500);
     expect(await res.text()).toContain("database is locked");
+  });
+
+  test("without a built export, pages say how to build the app (never old HTML)", async () => {
+    for (const path of ["/", "/legacy", "/health", "/projects", "/provider/codex"]) {
+      const res = await get(path);
+      expect(res.status).toBe(503);
+      expect(res.type).toContain("text/plain");
+      expect(res.body).toContain("bun run web:build");
+    }
   });
 });
 
@@ -223,7 +167,7 @@ describe("bun run dashboard", () => {
     try {
       let status = 0;
       for (let i = 0; i < 50 && !status; i++) {
-        status = await fetch(`http://127.0.0.1:${port}/health`).then((r) => r.status, () => 0);
+        status = await fetch(`http://127.0.0.1:${port}/api/health`).then((r) => r.status, () => 0);
         if (!status) await Bun.sleep(100);
       }
       expect(status).toBe(200);
@@ -231,22 +175,5 @@ describe("bun run dashboard", () => {
       proc.kill();
       await proc.exited;
     }
-  });
-});
-
-describe("JSON", () => {
-  test("serves the same view models as JSON", async () => {
-    seed();
-    const overview = await get("/api/overview");
-    expect(overview.status).toBe(200);
-    expect(overview.type).toContain("application/json");
-    expect(JSON.parse(overview.body).providers.map((p: { provider: string }) => p.provider)).toEqual(["codex"]);
-
-    const history = await get("/api/provider/codex");
-    expect(JSON.parse(history.body).cycles).toHaveLength(1);
-    expect((await get("/api/provider/nobody")).status).toBe(404);
-
-    const health = await get("/api/health");
-    expect(JSON.parse(health.body).unclassified).toHaveLength(1);
   });
 });

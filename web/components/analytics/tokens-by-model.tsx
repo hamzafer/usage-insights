@@ -4,10 +4,10 @@ import { ChartLine, Table2 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import type { AnalyticsSectionProps } from "@/components/analytics/types";
+import { ALL_PROVIDERS, ProviderTabs } from "@/components/provider-tabs";
 import { Section } from "@/components/section";
 import { ApiErrorState, EmptyState } from "@/components/states";
 import { type ChartConfig, ChartContainer, ChartTooltip } from "@/components/ui/chart";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useApi } from "@/hooks/use-api";
@@ -33,34 +33,19 @@ type View = "chart" | "table";
 
 /**
  * Tokens per day, one line per model (ChatGPT style): headline total, legend with dots, crosshair
- * and a tooltip listing every model of the day, a table view, and a Provider filter.
+ * and a tooltip listing every model of the day, a table view, and Provider tabs (All first).
  * `GET /api/tokens/daily?range=`; 9 or more models fold into "Other" (lib/tokens.ts).
  */
 export function TokensByModel({ range }: AnalyticsSectionProps) {
   const load = useCallback((init?: RequestInit) => api.tokensDaily(range, init), [range]);
   const tokens = useApi(load);
-  const [filter, setFilter] = useState<ProviderFilter>("all");
+  const [filter, setFilter] = useState<ProviderFilter>(ALL_PROVIDERS);
   const [view, setView] = useState<View>("chart");
 
   const providers = tokens.data ? [...tokens.data.providers].toSorted(byProviderOrder) : [];
   const actions =
     tokens.status === "ready" && tokens.data.models.length > 0 ? (
       <div className="flex items-center gap-2">
-        {providers.length > 1 ? (
-          <Select value={filter} onValueChange={setFilter}>
-            <SelectTrigger size="sm" aria-label="Provider" className="min-w-32 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent align="end">
-              <SelectItem value="all">All providers</SelectItem>
-              {providers.map((p) => (
-                <SelectItem key={p} value={p}>
-                  {providerName(p)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : null}
         <ToggleGroup
           type="single"
           variant="outline"
@@ -90,7 +75,12 @@ export function TokensByModel({ range }: AnalyticsSectionProps) {
           Read the Claude and Codex logs with <code className="font-mono text-foreground">bun run backfill:tokens</code>.
         </EmptyState>
       ) : (
-        <TokensBody data={tokens.data} filter={providers.includes(filter) ? filter : "all"} view={view} />
+        <div className="flex flex-col gap-4">
+          {providers.length > 1 ? (
+            <ProviderTabs all providers={providers} value={providers.includes(filter) ? filter : ALL_PROVIDERS} onChange={setFilter} />
+          ) : null}
+          <TokensBody data={tokens.data} filter={providers.includes(filter) ? filter : ALL_PROVIDERS} view={view} />
+        </div>
       )}
     </Section>
   );

@@ -1,7 +1,13 @@
 import { claudeCalibration } from "../calibration.ts";
-import { DEFAULT_TOP_SESSIONS, MAX_TOP_SESSIONS, TOP_SESSION_RANGES, type TopSessionRange, topSessions } from "../top-sessions.ts";
+import {
+  DEFAULT_TOP_SESSIONS,
+  MAX_TOP_SESSIONS,
+  sessionProviders,
+  TOP_SESSION_RANGES,
+  type TopSessionRange,
+  topSessions,
+} from "../top-sessions.ts";
 import { buildHero } from "./hero.ts";
-import { renderHealth, renderHistory, renderMessage, renderOverview, renderProjects, type PageContext } from "./render.ts";
 import { buildCycleHistory } from "./history.ts";
 import { hasExport, serveStatic, staticNotFound } from "./static.ts";
 import { buildProjectsRange, isProjectsRange } from "./projects-range.ts";
@@ -10,21 +16,20 @@ import { buildHealth, buildHistory, buildOverview, buildProjects, type Dashboard
 
 /**
  * The dashboard's request handler: the app's static export (`web/out`, ADR 0003) plus the JSON API.
- * The old server-rendered pages stay at /legacy, /health, /projects and /provider/:id until the
- * new app covers them (and at / while no export is built).
+ * Pages come only from the export; without one, every page path explains how to build it.
  * It only knows a `load` function, so serving it elsewhere (behind a login, ADR 0002) swaps the
  * data source and the listener, not the pages.
  */
 export interface DashboardDeps {
   load: () => DashboardData;
   now?: () => Date;
-  /** IANA time zone for times on the pages; the machine's local zone when omitted. */
+  /** IANA time zone for day buckets; the machine's local zone when omitted. */
   timeZone?: string;
   /** Where load failures are reported (stderr by default). */
   log?: (message: string) => void;
   /** The port it listens on; when given, only `localhost` or `127.0.0.1` at this port are served. */
   port?: number;
-  /** The app's static export folder (`web/out`); without a built export, / shows the old overview. */
+  /** The app's static export folder (`web/out`); without a built export, pages explain how to build it. */
   staticDir?: string;
 }
 
@@ -47,7 +52,6 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
   return (req) => {
     const url = new URL(req.url);
     const at = now();
-    const ctxBase = { timeZone: deps.timeZone, now: at.toISOString() };
     if (!isLocalHost(req.headers.get("host") ?? url.host, deps.port)) {
       return new Response("Forbidden: open the dashboard at 127.0.0.1 or localhost", { status: 403 });
     }
@@ -57,7 +61,8 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
 
     const path = url.pathname.replace(/\/+$/, "") || "/";
     const api = path === "/api" || path.startsWith("/api/");
-    if (!api && !isLegacyPage(path) && hasExport(deps.staticDir)) {
+    if (!api) {
+      if (!hasExport(deps.staticDir)) return notBuilt();
       return (
         serveStatic(deps.staticDir, url.pathname, req.method) ??
         staticNotFound(deps.staticDir, req.method) ??
@@ -71,17 +76,10 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       log(`dashboard: could not read the data: ${message}`);
-      return html(renderMessage("Could not read the data", message, { ...ctxBase, providers: [] }), 500);
+      return json({ error: `Could not read the data: ${message}` }, 500);
     }
 
-    const overview = () => buildOverview(data, at);
-    const providers = overview().map((p) => p.provider);
-    const ctx: PageContext = { ...ctxBase, providers };
-    const provider = /^\/(?:api\/)?provider\/([^/]+)$/.exec(path)?.[1];
-
-    if (path === "/" || path === "/legacy") return html(renderOverview(overview(), buildHealth(data, at), ctx));
-    if (path === "/health") return html(renderHealth(buildHealth(data, at), ctx));
-    if (path === "/api/overview") return json({ now: ctx.now, providers: overview() });
+    if (path === "/api/overview") return json({ now: at.toISOString(), providers: buildOverview(data, at) });
     if (path === "/api/health") return json(buildHealth(data, at));
     const historyOf = /^\/api\/history\/([^/]+)$/.exec(path)?.[1];
     if (historyOf !== undefined) {
@@ -89,14 +87,13 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
       const history = id === null ? null : buildCycleHistory(data, id, at);
       return history ? json(history) : json({ error: "No Cycles recorded for this Provider" }, 404);
     }
-    if (path === "/projects") return html(renderProjects(buildProjects(data, at), ctx));
     if (path === "/api/tokens/daily") {
       const range = url.searchParams.get("range") ?? "7d";
       if (!isTokenRange(range)) return json({ error: "range must be 7d or 30d" }, 400);
       return json(buildTokensDaily(data.tokens ?? [], range, at, deps.timeZone));
     }
     if (path === "/api/projects") {
-      // Without `?range=` it keeps the per-Cycle shape the old /projects page uses.
+      // Without `?range=` it keeps the per-Cycle shape.
       const range = url.searchParams.get("range");
       if (range === null) return json(buildProjects(data, at));
       if (!isProjectsRange(range)) return json({ error: "range must be 7d or 30d" }, 400);
@@ -109,23 +106,29 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
       const result = id === null ? null : buildHero(data, id, at, url.searchParams.get("label") ?? undefined);
       return result ? json(result) : json({ error: "No Cycle recorded for this Provider" }, 404);
     }
+    const provider = /^\/api\/provider\/([^/]+)$/.exec(path)?.[1];
     if (provider !== undefined) {
       const id = decodePathPart(provider);
       const history = id === null ? null : buildHistory(data, id, at);
-      if (!history) {
-        return api
-          ? json({ error: "No data for this Provider" }, 404)
-          : html(renderMessage("No data for this Provider", "Nothing has been recorded for it yet.", ctx), 404);
-      }
-      return api ? json(history) : html(renderHistory(history, ctx));
+      return history ? json(history) : json({ error: "No data for this Provider" }, 404);
     }
-    return api
-      ? json({ error: "Not found" }, 404)
-      : html(renderMessage("Page not found", "Pick a page from the navigation above.", ctx), 404);
+    return json({ error: "Not found" }, 404);
   };
 }
 
-/** `GET /api/sessions/top?range=7d|30d&limit=10`: the range's biggest sessions (ticket #21). */
+/** Without a built export there are no pages: say how to get them (never fall back to old HTML). */
+function notBuilt(): Response {
+  return new Response(
+    "The dashboard app is not built yet. Run `bun run dashboard` (it builds web/ first) or `bun run web:build`.\n",
+    { status: 503, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } },
+  );
+}
+
+/**
+ * `GET /api/sessions/top?range=7d|30d&limit=10&provider=codex`: the range's biggest sessions
+ * (ticket #21), optionally of one Provider; `providers` lists every Provider with sessions in the
+ * range, whatever the filter, so the app can show one tab each.
+ */
 function sessionsTop(data: DashboardData, params: URLSearchParams, at: Date): Response {
   const range = params.get("range") ?? "7d";
   if (!Object.hasOwn(TOP_SESSION_RANGES, range)) return json({ error: "range must be 7d or 30d" }, 400);
@@ -134,21 +137,21 @@ function sessionsTop(data: DashboardData, params: URLSearchParams, at: Date): Re
   if (!Number.isInteger(limit) || limit < 1 || limit > MAX_TOP_SESSIONS) {
     return json({ error: `limit must be a whole number from 1 to ${MAX_TOP_SESSIONS}` }, 400);
   }
+  const provider = params.get("provider") ?? undefined;
+  if (provider !== undefined && !/^[a-z0-9-]{1,64}$/.test(provider)) return json({ error: "provider must be a Provider id" }, 400);
+  const events = data.sessionTokens ?? [];
   const { calibrations } = claudeCalibration(data.readings, data.tokens ?? [], at);
   const sessions = topSessions({
-    events: data.sessionTokens ?? [],
+    events,
+    provider,
     readings: data.readings,
     calibrations,
     now: at,
     range: range as TopSessionRange,
     limit,
   });
-  return json({ now: at.toISOString(), range, sessions });
-}
-
-/** The old server-rendered pages, removed once the new app covers them (#22). */
-function isLegacyPage(path: string): boolean {
-  return path === "/legacy" || path === "/health" || path === "/projects" || path.startsWith("/provider/");
+  const providers = sessionProviders(events, at, range as TopSessionRange);
+  return json({ now: at.toISOString(), range, provider: provider ?? null, providers, sessions });
 }
 
 /** A decoded path segment; null when it is not valid percent-encoding. */
@@ -158,13 +161,6 @@ function decodePathPart(part: string): string | null {
   } catch {
     return null;
   }
-}
-
-function html(body: string, status = 200): Response {
-  return new Response(body, {
-    status,
-    headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
-  });
 }
 
 function json(body: unknown, status = 200): Response {

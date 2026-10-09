@@ -62,16 +62,19 @@ describe("static export", () => {
     expect(resolveStaticFile(out, "/%E0%A4%A")).toBeNull();
   });
 
-  test("the API and the old pages stay as they are", async () => {
+  test("the API sits next to the export; the old page paths are gone", async () => {
     const api = await get("/api/overview");
     expect(api.type).toContain("application/json");
     expect((await get("/api/nope")).status).toBe(404);
-    expect((await get("/legacy")).body).toContain("Allowance use");
-    expect((await get("/health")).body).toContain("Data health");
+    for (const path of ["/legacy", "/health", "/projects", "/provider/codex"]) {
+      expect(await get(path)).toMatchObject({ status: 404, body: expect.stringContaining("missing") });
+    }
   });
 
-  test("without a built export, / shows the old overview", async () => {
-    expect((await get("/", join(dir, "missing"))).body).toContain("Allowance use");
+  test("without a built export, / says how to build it", async () => {
+    const res = await get("/", join(dir, "missing"));
+    expect(res.status).toBe(503);
+    expect(res.body).toContain("bun run web:build");
   });
 });
 
