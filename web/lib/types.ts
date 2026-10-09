@@ -68,3 +68,29 @@ export interface Overview {
   now: string;
   providers: ProviderOverview[];
 }
+
+/** One row of `GET /api/sessions/top` (src/top-sessions.ts). */
+export interface TopSession {
+  provider: string;
+  id: string;
+  /** The main Project's folder name; "(other)" when none. */
+  project: string;
+  model: string;
+  startedAt: string;
+  endedAt: string;
+  calls: number;
+  tokens: number;
+  /** Share of the 5-hour limit, 0..1 (can pass 1); null when unknown. */
+  sessionShare: number | null;
+  /** Share of the weekly limit, 0..1; null when unknown. */
+  weeklyShare: number | null;
+  /** Null when both shares are unknown (tokens only). */
+  basis: Basis | null;
+}
+
+/** `GET /api/sessions/top?range=7d|30d` */
+export interface TopSessions {
+  now: string;
+  range: string;
+  sessions: TopSession[];
+}

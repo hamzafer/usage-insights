@@ -1,4 +1,4 @@
-import type { Overview } from "./types";
+import type { Overview, TopSessions } from "./types";
 
 /**
  * The JSON API client. Same origin: in production the Bun server serves the app and `/api/*`; in
@@ -33,4 +33,6 @@ export async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   overview: (init?: RequestInit) => getJson<Overview>("/api/overview", init),
+  topSessions: (range: string, init?: RequestInit) =>
+    getJson<TopSessions>(`/api/sessions/top?range=${encodeURIComponent(range)}`, init),
 };
