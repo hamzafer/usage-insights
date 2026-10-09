@@ -68,3 +68,29 @@ export interface Overview {
   now: string;
   providers: ProviderOverview[];
 }
+
+/** A ranked row of `GET /api/projects?range=`: a Project's folder name or a model id. */
+export interface RankedShare {
+  name: string;
+  /** What a person reads: the folder name, or the friendly model name ("Opus 5.5"). */
+  label: string;
+  tokens: number;
+  /** Of the Provider's total in the range, 0..1. */
+  share: number;
+}
+
+export interface ProviderRanking {
+  provider: string;
+  total: number;
+  /** Largest first. */
+  projects: RankedShare[];
+  models: RankedShare[];
+}
+
+/** `GET /api/projects?range=7d|30d`: every Provider with token logs (total 0 when quiet in the range). */
+export interface ProjectsRange {
+  range: "7d" | "30d";
+  from: string;
+  to: string;
+  providers: ProviderRanking[];
+}

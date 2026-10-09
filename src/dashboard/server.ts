@@ -1,5 +1,6 @@
 import { renderHealth, renderHistory, renderMessage, renderOverview, renderProjects, type PageContext } from "./render.ts";
 import { hasExport, serveStatic, staticNotFound } from "./static.ts";
+import { buildProjectsRange, isProjectsRange } from "./projects-range.ts";
 import { buildHealth, buildHistory, buildOverview, buildProjects, type DashboardData } from "./view-model.ts";
 
 /**
@@ -78,7 +79,13 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
     if (path === "/api/overview") return json({ now: ctx.now, providers: overview() });
     if (path === "/api/health") return json(buildHealth(data, at));
     if (path === "/projects") return html(renderProjects(buildProjects(data, at), ctx));
-    if (path === "/api/projects") return json(buildProjects(data, at));
+    if (path === "/api/projects") {
+      // Without `?range=` it keeps the per-Cycle shape the old /projects page uses.
+      const range = url.searchParams.get("range");
+      if (range === null) return json(buildProjects(data, at));
+      if (!isProjectsRange(range)) return json({ error: "range must be 7d or 30d" }, 400);
+      return json(buildProjectsRange(data, at, range));
+    }
     if (provider !== undefined) {
       const id = decodePathPart(provider);
       const history = id === null ? null : buildHistory(data, id, at);
