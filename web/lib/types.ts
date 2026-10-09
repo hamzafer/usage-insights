@@ -69,6 +69,24 @@ export interface Overview {
   providers: ProviderOverview[];
 }
 
+/** One local day of `GET /api/tokens/daily`: tokens per Provider, then per model id (absent when 0). */
+export interface TokensDay {
+  /** `YYYY-MM-DD`, the server's local calendar day. */
+  date: string;
+  byProvider: Record<string, Record<string, number>>;
+}
+
+/** `GET /api/tokens/daily?range=7d|30d` */
+export interface TokensDaily {
+  range: "7d" | "30d";
+  /** Oldest first, today last; days without tokens included (logs: no events is truly 0). */
+  days: TokensDay[];
+  /** Models with tokens in the last 30 days, largest first in every range: the stable color order. */
+  models: { id: string; name: string }[];
+  /** Providers with tokens in the last 30 days. */
+  providers: string[];
+}
+
 /** A ranked row of `GET /api/projects?range=`: a Project's folder name or a model id. */
 export interface RankedShare {
   name: string;

@@ -1,6 +1,7 @@
 import { renderHealth, renderHistory, renderMessage, renderOverview, renderProjects, type PageContext } from "./render.ts";
 import { hasExport, serveStatic, staticNotFound } from "./static.ts";
 import { buildProjectsRange, isProjectsRange } from "./projects-range.ts";
+import { buildTokensDaily, isTokenRange } from "./tokens-daily.ts";
 import { buildHealth, buildHistory, buildOverview, buildProjects, type DashboardData } from "./view-model.ts";
 
 /**
@@ -79,6 +80,11 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
     if (path === "/api/overview") return json({ now: ctx.now, providers: overview() });
     if (path === "/api/health") return json(buildHealth(data, at));
     if (path === "/projects") return html(renderProjects(buildProjects(data, at), ctx));
+    if (path === "/api/tokens/daily") {
+      const range = url.searchParams.get("range") ?? "7d";
+      if (!isTokenRange(range)) return json({ error: "range must be 7d or 30d" }, 400);
+      return json(buildTokensDaily(data.tokens ?? [], range, at, deps.timeZone));
+    }
     if (path === "/api/projects") {
       // Without `?range=` it keeps the per-Cycle shape the old /projects page uses.
       const range = url.searchParams.get("range");
