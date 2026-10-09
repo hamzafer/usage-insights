@@ -1,4 +1,5 @@
-import type { HeroCycle, Overview } from "./types";
+import type { Range } from "./range";
+import type { HeroCycle, Overview, ProjectsRange, TokensDaily } from "./types";
 
 /**
  * The JSON API client. Same origin: in production the Bun server serves the app and `/api/*`; in
@@ -33,6 +34,8 @@ export async function getJson<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   overview: (init?: RequestInit) => getJson<Overview>("/api/overview", init),
+  tokensDaily: (range: Range, init?: RequestInit) => getJson<TokensDaily>(`/api/tokens/daily?range=${range}`, init),
+  projects: (range: Range, init?: RequestInit) => getJson<ProjectsRange>(`/api/projects?range=${range}`, init),
   hero: (provider: string, label?: string, init?: RequestInit) =>
     getJson<HeroCycle>(
       `/api/hero/${encodeURIComponent(provider)}${label ? `?label=${encodeURIComponent(label)}` : ""}`,

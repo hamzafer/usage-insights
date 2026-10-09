@@ -69,6 +69,50 @@ export interface Overview {
   providers: ProviderOverview[];
 }
 
+/** One local day of `GET /api/tokens/daily`: tokens per Provider, then per model id (absent when 0). */
+export interface TokensDay {
+  /** `YYYY-MM-DD`, the server's local calendar day. */
+  date: string;
+  byProvider: Record<string, Record<string, number>>;
+}
+
+/** `GET /api/tokens/daily?range=7d|30d` */
+export interface TokensDaily {
+  range: "7d" | "30d";
+  /** Oldest first, today last; days without tokens included (logs: no events is truly 0). */
+  days: TokensDay[];
+  /** Models with tokens in the last 30 days, largest first in every range: the stable color order. */
+  models: { id: string; name: string }[];
+  /** Providers with tokens in the last 30 days. */
+  providers: string[];
+}
+
+/** A ranked row of `GET /api/projects?range=`: a Project's folder name or a model id. */
+export interface RankedShare {
+  name: string;
+  /** What a person reads: the folder name, or the friendly model name ("Opus 5.5"). */
+  label: string;
+  tokens: number;
+  /** Of the Provider's total in the range, 0..1. */
+  share: number;
+}
+
+export interface ProviderRanking {
+  provider: string;
+  total: number;
+  /** Largest first. */
+  projects: RankedShare[];
+  models: RankedShare[];
+}
+
+/** `GET /api/projects?range=7d|30d`: every Provider with token logs (total 0 when quiet in the range). */
+export interface ProjectsRange {
+  range: "7d" | "30d";
+  from: string;
+  to: string;
+  providers: ProviderRanking[];
+}
+
 /** One reading in the hero chart: share of the allowance used at a time. */
 export interface HeroPoint {
   at: string;
