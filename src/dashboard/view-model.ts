@@ -28,6 +28,8 @@ export interface DashboardData {
   runs?: RunOutcome[];
   /** Token events with their session (top sessions), oldest first; none when omitted. */
   sessionTokens?: SessionTokenEvent[];
+  /** Every Provider with token events, when `tokens` holds only a range of them; else from `tokens`. */
+  tokenProviders?: string[];
 }
 
 /**

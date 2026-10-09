@@ -53,7 +53,7 @@ export function buildProjectsRange(data: DashboardData, now: string | Date, rang
   const to = new Date(now).toISOString();
   const from = projectsRangeFrom(now, range);
   const events = data.tokens ?? [];
-  const providers = [...new Set(events.map((e) => e.provider))].toSorted();
+  const providers = data.tokenProviders ?? [...new Set(events.map((e) => e.provider))].toSorted();
   return {
     range,
     from,

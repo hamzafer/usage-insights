@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { loadDashboardData } from "../src/dashboard/data.ts";
 import { dashboardHandler } from "../src/dashboard/server.ts";
 import type { DataNeeds } from "../src/dashboard/view-model.ts";
-import { openStore } from "../src/store.ts";
+import { Database } from "bun:sqlite";
+import { MIGRATIONS, openStore } from "../src/store.ts";
 import { NOW, reading, stored, SYNTHETIC_GAPS, syntheticReadings, tokenEvent } from "./dashboard-fixtures.ts";
 
 // Handlers over a real store in a temp data directory, seeded with synthetic readings.
@@ -29,7 +30,7 @@ function seed() {
 }
 
 function handler() {
-  return dashboardHandler({ load: () => loadDashboardData(dbPath), now: () => new Date(NOW), timeZone: "UTC" });
+  return dashboardHandler({ load: (needs) => loadDashboardData(dbPath, needs), now: () => new Date(NOW), timeZone: "UTC" });
 }
 
 async function get(path: string, method = "GET") {
@@ -117,7 +118,7 @@ describe("API", () => {
 
   test("requests for another host name or port are refused (DNS rebinding)", async () => {
     seed();
-    const guarded = dashboardHandler({ load: () => loadDashboardData(dbPath), now: () => new Date(NOW), timeZone: "UTC", port: 6740 });
+    const guarded = dashboardHandler({ load: (needs) => loadDashboardData(dbPath, needs), now: () => new Date(NOW), timeZone: "UTC", port: 6740 });
     const status = async (host: string) =>
       (await guarded(new Request("http://127.0.0.1:6740/api/overview", { headers: { host } }))).status;
     expect(await status("127.0.0.1:6740")).toBe(200);
@@ -189,6 +190,16 @@ describe("API", () => {
     const sessions = loadDashboardData(dbPath, { tokens: "all", sessionTokens: true });
     expect(sessions.sessionTokens!.map((e) => e.session)).toEqual(["s1", "s2"]);
     expect(sessions.tokens).toBe(sessions.sessionTokens!);
+  });
+
+  test("a data file swapped for an older version is migrated once, never a raw SQL error", () => {
+    loadDashboardData(dbPath, { tokens: "none" }); // migrated: later loads open it read-only
+    for (const suffix of ["", "-wal", "-shm"]) rmSync(dbPath + suffix, { force: true });
+    const old = new Database(dbPath, { create: true });
+    old.exec(MIGRATIONS[0]!);
+    old.exec("PRAGMA user_version = 1");
+    old.close();
+    expect(loadDashboardData(dbPath, { tokens: "all" }).tokens).toEqual([]);
   });
 
   test("Last week: the Report's week numbers for the Overview line", async () => {

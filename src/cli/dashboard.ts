@@ -29,7 +29,7 @@ const server = Bun.serve({
   hostname: "127.0.0.1",
   port,
   // `port` also limits the Host header to 127.0.0.1 or localhost at this port (DNS rebinding).
-  fetch: dashboardHandler({ load: () => loadDashboardData(config.dbPath), port, staticDir }),
+  fetch: dashboardHandler({ load: (needs) => loadDashboardData(config.dbPath, needs), port, staticDir }),
 });
 
 console.log(`Usage Insights dashboard on http://127.0.0.1:${server.port}`);
