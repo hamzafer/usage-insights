@@ -87,6 +87,37 @@ describe("overview", () => {
     expect(cursor!.running[0]!.pace.expectedWaste).toBeNull();
     // Its start is unknown without a previous Reset.
     expect(cursor!.running[0]!.elapsedShare).toBeNull();
+    expect(cursor!.running[0]!.status).toBe("unknown");
+    expect(cursor!.running[0]!.lastCycleAtSamePoint).toBeNull();
+  });
+
+  test("gives the running Cycle the Telegram card's status dot", () => {
+    const running = buildOverview(syntheticData(), NOW)[1]!.running[0]!;
+    // 40% used after 4.5 of 7 days: heading for ~38% Waste, between 30% and 70%.
+    expect(running.pace.expectedWaste!).toBeGreaterThan(0.3);
+    expect(running.status).toBe("yellow");
+  });
+
+  test("compares the running Cycle with the last one at the same point since its start", () => {
+    const running = buildOverview(syntheticData(), NOW)[1]!.running[0]!;
+    // The newest reading is 4d 11h 55m into the Cycle (from 10-01 00:00). The last Cycle (09-24 to
+    // 10-01, as long as this one) was then at 09-28 11:55: between 20% (09-25 00:00) and 70%
+    // (09-30 23:50), interpolated.
+    const t = (Date.parse("2026-09-28T11:55:00.000Z") - Date.parse("2026-09-25T00:00:00.000Z")) /
+      (Date.parse("2026-09-30T23:50:00.000Z") - Date.parse("2026-09-25T00:00:00.000Z"));
+    expect(running.lastCycleAtSamePoint).toEqual({ usedShare: expect.closeTo(0.2 + t * 0.5, 6), basis: "measured" });
+  });
+
+  test("has no delta when the last Cycle has no reading before that point", () => {
+    const data = {
+      readings: [
+        reading("cursor", "Total usage", "cycle", 50, "2026-10-01T00:00:00.000Z", "2026-09-30T00:00:00.000Z"),
+        reading("cursor", "Total usage", "cycle", 5, "2026-11-01T00:00:00.000Z", "2026-10-05T10:00:00.000Z"),
+      ],
+      latest: [],
+      gaps: [],
+    };
+    expect(buildOverview(data, NOW)[0]!.running[0]!.lastCycleAtSamePoint).toBeNull();
   });
 });
 

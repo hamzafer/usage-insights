@@ -15,4 +15,28 @@ jobs:
           bun-version: "1.2.23"
       - run: bun install --frozen-lockfile
       - run: bunx tsc --noEmit
+      # Also runs the web app's pure logic tests (web/lib/*.test.ts).
       - run: bun test
+
+  web:
+    # The dashboard app (web/, ADR 0003): lint, typecheck and build the static export.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.2.23"
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.bun/install/cache
+            web/.next/cache
+          key: web-${{ runner.os }}-${{ hashFiles('web/bun.lock') }}
+          restore-keys: web-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - run: bun run lint --max-warnings 0
+      - run: bun run typecheck
+      - run: bun run build

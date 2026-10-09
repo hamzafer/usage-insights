@@ -41,9 +41,25 @@ bun run dashboard   # then open http://127.0.0.1:6740
 ```
 
 It listens on `127.0.0.1` only (ADR 0002) and reads the data directory on every page load, so
-reload for new Snapshots. Pages:
+reload for new Snapshots.
 
-- **Overview** (`/`): per Provider, the running Cycle's usage and Pace, the last Cycle's Waste,
+The dashboard is a Next.js app in `web/`, built as a static export (`web/out`, ADR 0003) and
+served by the same Bun process as the JSON API. `bun run dashboard` builds it first when
+`web/out` is missing or older than any file in `web/` (it installs `web/`'s dependencies on the
+first build); when it is up to date this is a few file checks. `bun run dashboard --no-build`
+skips the check. Without a built export, `/` shows the old overview.
+
+- **Overview** (`/`): one plan tile per Provider: the running Cycle's % used, a meter with a tick
+  at how far through the Cycle it is, the status dot (the same rule as the Telegram card), a short
+  Pace line and the change vs the last Cycle at the same point.
+- **Analytics** (`/analytics`): sections arrive with the redesign tickets.
+
+Developing the app: run `bun run dashboard` (the API) and `bun run web:dev` (`next dev`, which
+proxies `/api/*` to it). `bun run web:build` builds the export by hand.
+
+The old server-rendered pages stay until the new app covers them:
+
+- **Overview** (`/legacy`): per Provider, the running Cycle's usage and Pace, the last Cycle's Waste,
   Limit Hits and Blocked Time over 28 days, Overage, and Waste of the last few Cycles.
 - **History** (`/provider/<id>`): Waste per Cycle and per started Session over time, and Idle
   Capacity per Cycle.

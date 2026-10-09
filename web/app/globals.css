@@ -1,0 +1,148 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Tokens: shadcn new-york on zinc, one electric-blue accent (--primary: selected tab, hero line,
+ * focus ring). Provider colors are categorical and fixed per Provider; status colors are separate
+ * and always shown with a label. Both sets are validated with the dataviz validator against the
+ * card surface of each theme (see lib/providers.ts).
+ */
+@theme inline {
+  /* Literal family names (the geist package's): @theme inline cannot use next/font's runtime variables. */
+  --font-sans: "GeistSans", "GeistSans Fallback", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "GeistMono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-track: var(--track);
+  --color-provider-claude: var(--provider-claude);
+  --color-provider-claude-work: var(--provider-claude-work);
+  --color-provider-codex: var(--provider-codex);
+  --color-provider-cursor: var(--provider-cursor);
+  --color-provider-copilot: var(--provider-copilot);
+  --color-provider-other: var(--provider-other);
+  --color-status-good: var(--status-good);
+  --color-status-warning: var(--status-warning);
+  --color-status-critical: var(--status-critical);
+  --color-status-unknown: var(--status-unknown);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0.985 0 0);
+  --foreground: oklch(0.141 0.005 285.823);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.141 0.005 285.823);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.141 0.005 285.823);
+  --primary: oklch(0.55 0.22 262);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --muted: oklch(0.967 0.001 286.375);
+  --muted-foreground: oklch(0.5 0.014 285.938);
+  --accent: oklch(0.967 0.001 286.375);
+  --accent-foreground: oklch(0.21 0.006 285.885);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.92 0.004 286.32);
+  --input: oklch(0.92 0.004 286.32);
+  --ring: oklch(0.55 0.22 262);
+  --track: oklch(0.94 0.003 286);
+
+  /* Provider colors (light): validated against the light card #ffffff. */
+  --provider-claude: #eb6834;
+  --provider-claude-work: #4a3aa7;
+  --provider-codex: #1baf7a;
+  --provider-cursor: #eda100;
+  --provider-copilot: #e87ba4;
+  --provider-other: #898781;
+
+  /* Status (never themed); always paired with a label. */
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-critical: #d03b3b;
+  --status-unknown: #898781;
+}
+
+.dark {
+  --background: oklch(0.13 0.004 286);
+  --foreground: oklch(0.97 0 0);
+  --card: oklch(0.17 0.004 286);
+  --card-foreground: oklch(0.97 0 0);
+  --popover: oklch(0.19 0.004 286);
+  --popover-foreground: oklch(0.97 0 0);
+  --primary: oklch(0.64 0.2 258);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.24 0.006 286);
+  --secondary-foreground: oklch(0.97 0 0);
+  --muted: oklch(0.24 0.006 286);
+  --muted-foreground: oklch(0.7 0.012 286);
+  --accent: oklch(0.24 0.006 286);
+  --accent-foreground: oklch(0.97 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 14%);
+  --ring: oklch(0.64 0.2 258);
+  --track: oklch(1 0 0 / 8%);
+
+  /* Provider colors (dark): the same hues stepped for the dark card. */
+  --provider-claude: #d95926;
+  --provider-claude-work: #9085e9;
+  --provider-codex: #199e70;
+  --provider-cursor: #c98500;
+  --provider-copilot: #d55181;
+  --provider-other: #898781;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "ss01", "cv11";
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

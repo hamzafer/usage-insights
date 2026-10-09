@@ -1,8 +1,11 @@
 import { renderHealth, renderHistory, renderMessage, renderOverview, renderProjects, type PageContext } from "./render.ts";
+import { hasExport, serveStatic, staticNotFound } from "./static.ts";
 import { buildHealth, buildHistory, buildOverview, buildProjects, type DashboardData } from "./view-model.ts";
 
 /**
- * The dashboard's request handler: routes to view models, rendered as HTML or JSON.
+ * The dashboard's request handler: the app's static export (`web/out`, ADR 0003) plus the JSON API.
+ * The old server-rendered pages stay at /legacy, /health, /projects and /provider/:id until the
+ * new app covers them (and at / while no export is built).
  * It only knows a `load` function, so serving it elsewhere (behind a login, ADR 0002) swaps the
  * data source and the listener, not the pages.
  */
@@ -15,6 +18,8 @@ export interface DashboardDeps {
   log?: (message: string) => void;
   /** The port it listens on; when given, only `localhost` or `127.0.0.1` at this port are served. */
   port?: number;
+  /** The app's static export folder (`web/out`); without a built export, / shows the old overview. */
+  staticDir?: string;
 }
 
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1"]);
@@ -44,6 +49,16 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
       return new Response("Method not allowed", { status: 405, headers: { allow: "GET, HEAD" } });
     }
 
+    const path = url.pathname.replace(/\/+$/, "") || "/";
+    const api = path === "/api" || path.startsWith("/api/");
+    if (!api && !isLegacyPage(path) && hasExport(deps.staticDir)) {
+      return (
+        serveStatic(deps.staticDir, url.pathname, req.method) ??
+        staticNotFound(deps.staticDir, req.method) ??
+        new Response("Not found", { status: 404 })
+      );
+    }
+
     let data: DashboardData;
     try {
       data = deps.load();
@@ -56,10 +71,9 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
     const overview = () => buildOverview(data, at);
     const providers = overview().map((p) => p.provider);
     const ctx: PageContext = { ...ctxBase, providers };
-    const path = url.pathname.replace(/\/+$/, "") || "/";
     const provider = /^\/(?:api\/)?provider\/([^/]+)$/.exec(path)?.[1];
 
-    if (path === "/") return html(renderOverview(overview(), buildHealth(data, at), ctx));
+    if (path === "/" || path === "/legacy") return html(renderOverview(overview(), buildHealth(data, at), ctx));
     if (path === "/health") return html(renderHealth(buildHealth(data, at), ctx));
     if (path === "/api/overview") return json({ now: ctx.now, providers: overview() });
     if (path === "/api/health") return json(buildHealth(data, at));
@@ -68,7 +82,6 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
     if (provider !== undefined) {
       const id = decodePathPart(provider);
       const history = id === null ? null : buildHistory(data, id, at);
-      const api = path.startsWith("/api/");
       if (!history) {
         return api
           ? json({ error: "No data for this Provider" }, 404)
@@ -76,10 +89,15 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
       }
       return api ? json(history) : html(renderHistory(history, ctx));
     }
-    return path.startsWith("/api/")
+    return api
       ? json({ error: "Not found" }, 404)
       : html(renderMessage("Page not found", "Pick a page from the navigation above.", ctx), 404);
   };
+}
+
+/** The old server-rendered pages, removed once the new app covers them (#22). */
+function isLegacyPage(path: string): boolean {
+  return path === "/legacy" || path === "/health" || path === "/projects" || path.startsWith("/provider/");
 }
 
 /** A decoded path segment; null when it is not valid percent-encoding. */
