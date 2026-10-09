@@ -28,16 +28,17 @@ export function LastWeekRow() {
   const line = lastWeekLine(week.data);
   const items = [...line.cycles, line.limitHits, line.overage];
   return (
-    <p className="px-1 text-sm leading-6 text-muted-foreground" aria-label="Last week">
-      <span className="mr-2 font-medium text-foreground">Last week</span>
+    // A wrapping row: each item stays whole, and long weeks wrap between items, never off the page.
+    <p className="flex flex-wrap items-baseline gap-x-2 px-1 text-sm leading-6 text-muted-foreground" aria-label="Last week">
+      <span className="mr-1 font-medium whitespace-nowrap text-foreground">Last week</span>
       {items.map((item, i) => (
         <Fragment key={i}>
           {i > 0 ? (
-            <span aria-hidden className="mx-2 text-muted-foreground/50">
+            <span aria-hidden className="text-muted-foreground/50">
               ·
             </span>
           ) : null}
-          <span className="whitespace-nowrap tabular-nums">{item}</span>
+          <span className="tabular-nums">{item}</span>
         </Fragment>
       ))}
     </p>
