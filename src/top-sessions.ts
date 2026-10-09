@@ -52,6 +52,8 @@ export interface TopSessionsInput {
   now: string | Date;
   range: TopSessionRange;
   limit?: number;
+  /** Only this Provider's sessions; every Provider's when omitted. */
+  provider?: string;
 }
 
 const DAY_MS = 24 * 3_600_000;
@@ -59,13 +61,16 @@ const DAY_MS = 24 * 3_600_000;
 const SAME_WINDOW_MS = 2 * 60_000;
 const CODEX_SOURCE = "backfill:codex";
 
-export function topSessions({ events, readings, calibrations, now, range, limit = DEFAULT_TOP_SESSIONS }: TopSessionsInput): TopSession[] {
-  const to = typeof now === "string" ? Date.parse(now) : now.getTime();
-  const from = to - TOP_SESSION_RANGES[range] * DAY_MS;
-  const inRange = events.filter((e) => {
-    const at = Date.parse(e.at);
-    return e.session !== null && at >= from && at <= to;
-  });
+export function topSessions({
+  events,
+  readings,
+  calibrations,
+  now,
+  range,
+  limit = DEFAULT_TOP_SESSIONS,
+  provider,
+}: TopSessionsInput): TopSession[] {
+  const inRange = sessionEventsInRange(events, now, range).filter((e) => provider === undefined || e.provider === provider);
   const codexLines = codexReadings(readings);
 
   const sessions = [...Map.groupBy(inRange, (e) => `${e.provider}\u0000${e.session}`).values()].map((calls) => {
@@ -100,6 +105,20 @@ export function topSessions({ events, readings, calibrations, now, range, limit 
   return sessions
     .toSorted((a, b) => b.tokens - a.tokens || (a.startedAt < b.startedAt ? 1 : a.startedAt > b.startedAt ? -1 : 0))
     .slice(0, limit);
+}
+
+/** The Providers with at least one session in the range, sorted by id (for a Provider filter). */
+export function sessionProviders(events: readonly SessionTokenEvent[], now: string | Date, range: TopSessionRange): string[] {
+  return [...new Set(sessionEventsInRange(events, now, range).map((e) => e.provider))].toSorted();
+}
+
+function sessionEventsInRange(events: readonly SessionTokenEvent[], now: string | Date, range: TopSessionRange): SessionTokenEvent[] {
+  const to = typeof now === "string" ? Date.parse(now) : now.getTime();
+  const from = to - TOP_SESSION_RANGES[range] * DAY_MS;
+  return events.filter((e) => {
+    const at = Date.parse(e.at);
+    return e.session !== null && at >= from && at <= to;
+  });
 }
 
 /** The value with the most tokens among the calls (ties: the first seen). */

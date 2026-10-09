@@ -1,5 +1,12 @@
 import { claudeCalibration } from "../calibration.ts";
-import { DEFAULT_TOP_SESSIONS, MAX_TOP_SESSIONS, TOP_SESSION_RANGES, type TopSessionRange, topSessions } from "../top-sessions.ts";
+import {
+  DEFAULT_TOP_SESSIONS,
+  MAX_TOP_SESSIONS,
+  sessionProviders,
+  TOP_SESSION_RANGES,
+  type TopSessionRange,
+  topSessions,
+} from "../top-sessions.ts";
 import { buildHero } from "./hero.ts";
 import { buildCycleHistory } from "./history.ts";
 import { hasExport, serveStatic, staticNotFound } from "./static.ts";
@@ -117,7 +124,11 @@ function notBuilt(): Response {
   );
 }
 
-/** `GET /api/sessions/top?range=7d|30d&limit=10`: the range's biggest sessions (ticket #21). */
+/**
+ * `GET /api/sessions/top?range=7d|30d&limit=10&provider=codex`: the range's biggest sessions
+ * (ticket #21), optionally of one Provider; `providers` lists every Provider with sessions in the
+ * range, whatever the filter, so the app can show one tab each.
+ */
 function sessionsTop(data: DashboardData, params: URLSearchParams, at: Date): Response {
   const range = params.get("range") ?? "7d";
   if (!Object.hasOwn(TOP_SESSION_RANGES, range)) return json({ error: "range must be 7d or 30d" }, 400);
@@ -126,16 +137,21 @@ function sessionsTop(data: DashboardData, params: URLSearchParams, at: Date): Re
   if (!Number.isInteger(limit) || limit < 1 || limit > MAX_TOP_SESSIONS) {
     return json({ error: `limit must be a whole number from 1 to ${MAX_TOP_SESSIONS}` }, 400);
   }
+  const provider = params.get("provider") ?? undefined;
+  if (provider !== undefined && !/^[a-z0-9-]{1,64}$/.test(provider)) return json({ error: "provider must be a Provider id" }, 400);
+  const events = data.sessionTokens ?? [];
   const { calibrations } = claudeCalibration(data.readings, data.tokens ?? [], at);
   const sessions = topSessions({
-    events: data.sessionTokens ?? [],
+    events,
+    provider,
     readings: data.readings,
     calibrations,
     now: at,
     range: range as TopSessionRange,
     limit,
   });
-  return json({ now: at.toISOString(), range, sessions });
+  const providers = sessionProviders(events, at, range as TopSessionRange);
+  return json({ now: at.toISOString(), range, provider: provider ?? null, providers, sessions });
 }
 
 /** A decoded path segment; null when it is not valid percent-encoding. */

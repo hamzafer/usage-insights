@@ -198,6 +198,21 @@ describe("GET /api/sessions/top", () => {
     expect((await get("/api/sessions/top?range=30d&limit=1")).body.sessions.map((s: any) => s.tokens)).toEqual([900]);
   });
 
+  test("provider keeps one Provider's sessions; providers lists every Provider in the range", async () => {
+    seed();
+    const all = (await get("/api/sessions/top?range=30d")).body;
+    expect(all.provider).toBeNull();
+    expect(all.providers).toEqual(["claude", "codex"]);
+    const codex = (await get("/api/sessions/top?range=30d&provider=codex")).body;
+    expect(codex.provider).toBe("codex");
+    expect(codex.sessions.map((s: any) => s.provider)).toEqual(["codex"]);
+    // The limit applies within the Provider: Claude's bigger sessions never crowd Codex out.
+    expect((await get("/api/sessions/top?range=30d&limit=1&provider=codex")).body.sessions.map((s: any) => s.tokens)).toEqual([800]);
+    expect((await get("/api/sessions/top?range=7d&provider=claude")).body.providers).toEqual(["claude", "codex"]);
+    expect((await get("/api/sessions/top?range=7d&provider=nobody")).body.sessions).toEqual([]);
+    expect((await get("/api/sessions/top?provider=%2Fetc")).status).toBe(400);
+  });
+
   test("defaults to 7d; a bad range or limit is a 400", async () => {
     seed();
     expect((await get("/api/sessions/top")).body.range).toBe("7d");

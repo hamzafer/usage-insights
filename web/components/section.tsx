@@ -23,7 +23,7 @@ export function Section({
   return (
     <section id={id} aria-labelledby={headingId} className={cn("rounded-xl border bg-card text-card-foreground", className)}>
       <div className="flex flex-wrap items-start gap-x-4 gap-y-2 px-5 pt-4 pb-3">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-[1_1_12rem]">
           <h2 id={headingId} className="text-sm font-medium">
             {title}
           </h2>

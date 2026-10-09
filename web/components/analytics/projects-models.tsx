@@ -2,9 +2,9 @@
 
 import { useCallback, useState } from "react";
 import type { AnalyticsSectionProps } from "@/components/analytics/types";
+import { ProviderTabs } from "@/components/provider-tabs";
 import { ApiErrorState, EmptyState } from "@/components/states";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useApi } from "@/hooks/use-api";
 import { api } from "@/lib/api";
@@ -59,20 +59,7 @@ export function ProjectsModels({ range }: AnalyticsSectionProps) {
       }
       actions={
         providers.length > 1 ? (
-          <Tabs value={current.provider} onValueChange={setPicked}>
-            <TabsList aria-label="Provider">
-              {providers.map((p) => (
-                <TabsTrigger key={p.provider} value={p.provider} className="gap-2 px-2.5 text-[13px]">
-                  <span
-                    aria-hidden
-                    className="size-2 rounded-full"
-                    style={{ backgroundColor: providerColor(p.provider) }}
-                  />
-                  {providerName(p.provider)}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
+          <ProviderTabs providers={providers.map((p) => p.provider)} value={current.provider} onChange={setPicked} />
         ) : (
           <span className="flex items-center gap-2 text-[13px] text-muted-foreground">
             <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: providerColor(current.provider) }} />
@@ -81,7 +68,7 @@ export function ProjectsModels({ range }: AnalyticsSectionProps) {
         )
       }
     >
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid flex-1 gap-4 sm:grid-cols-2">
         <RankedCard key={`projects-${current.provider}`} title="Projects" noun="Projects" ranking={current} rows={current.projects} />
         <RankedCard key={`models-${current.provider}`} title="Models" noun="models" ranking={current} rows={current.models} />
       </div>
@@ -100,9 +87,9 @@ function Frame({
   children: React.ReactNode;
 }) {
   return (
-    <section aria-labelledby="projects-models-title" className="flex min-w-0 flex-col gap-3">
+    <section aria-labelledby="projects-models-title" className="flex h-full min-w-0 flex-col gap-3">
       <div className="flex min-h-9 flex-wrap items-center gap-x-4 gap-y-2">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-[1_1_12rem]">
           <h2 id="projects-models-title" className="text-sm font-medium">
             Projects and models
           </h2>

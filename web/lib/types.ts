@@ -88,10 +88,14 @@ export interface TopSession {
   basis: Basis | null;
 }
 
-/** `GET /api/sessions/top?range=7d|30d` */
+/** `GET /api/sessions/top?range=7d|30d&provider=` */
 export interface TopSessions {
   now: string;
   range: string;
+  /** The Provider filter, null for all. */
+  provider: string | null;
+  /** Every Provider with sessions in the range, whatever the filter. */
+  providers: string[];
   sessions: TopSession[];
 }
 
@@ -205,4 +209,39 @@ export interface HeroCycle {
   } | null;
   /** Stretches without readings: drawn as breaks, never as zero. */
   gaps: { from: string; to: string }[];
+}
+
+/** A Backfill or Report run's outcome (RunOutcome in src/store.ts). */
+export interface RunOutcome {
+  /** `backfill:codex`, `backfill:tokens` or `report`. */
+  job: string;
+  at: string;
+  ok: boolean;
+  reason: string | null;
+}
+
+/** Claude calibration of one account and line (src/calibration.ts). */
+export interface Calibration {
+  provider: string;
+  label: string;
+  role: "session" | "cycle";
+  samples: number;
+  /** Used% movement over the counted intervals, in percentage points. */
+  movement: number;
+  tokens: number;
+  ready: boolean;
+  tokensPerPercent: number | null;
+}
+
+/** `GET /api/health` (buildHealth in src/dashboard/view-model.ts). */
+export interface DataHealth {
+  providers: { provider: string; lastSnapshotAt: string | null; stale: boolean }[];
+  unclassified: { provider: string; label: string; lastSeenAt: string }[];
+  /** Recorder runs that could not take a Snapshot, newest first. */
+  recorderGaps: { recordedAt: string; reason: string }[];
+  /** Failed Backfill and Report runs among the newest ones, newest first. */
+  failedRuns: RunOutcome[];
+  /** Stretches without Snapshots per Provider, newest first. */
+  snapshotGaps: { provider: string; from: string; to: string }[];
+  calibration: Calibration[];
 }

@@ -3,10 +3,10 @@
 import { ChartColumn, Table2, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import type { AnalyticsSectionProps } from "@/components/analytics/types";
+import { ProviderTabs } from "@/components/provider-tabs";
 import { Section } from "@/components/section";
 import { ApiErrorState, EmptyState } from "@/components/states";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useApi } from "@/hooks/use-api";
@@ -22,7 +22,8 @@ type View = "chart" | "table";
 /**
  * Waste and Limit history (#20): per plan (tabs), one stacked bar per Cycle, used (Provider color)
  * under wasted (neutral), with Limit Hits marked above the bar. Estimated Cycles are hatched and
- * marked "~", low-confidence ones faded, the running Cycle drawn open (no Waste yet). The range
+ * marked "~", low-confidence ones lightly faded (most real Codex Cycles are, so they stay readable;
+ * the tooltip and table say why), the running Cycle drawn open (no Waste yet). The range
  * toggle picks how many Cycles show (lib/history.ts).
  */
 export function WasteHistory({ range }: AnalyticsSectionProps) {
@@ -66,17 +67,10 @@ export function WasteHistory({ range }: AnalyticsSectionProps) {
       ) : provider === null ? (
         <EmptyState title="No Cycles recorded yet">Each plan&apos;s Cycles show up here after their first Snapshot.</EmptyState>
       ) : (
-        <Tabs value={provider} onValueChange={setPicked} className="gap-4">
-          <TabsList className="max-w-full overflow-x-auto">
-            {providers.map((p) => (
-              <TabsTrigger key={p} value={p} className="gap-2 px-3">
-                <span className="size-2 shrink-0 rounded-[2px]" style={{ background: providerColor(p) }} aria-hidden />
-                {providerName(p)}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+        <div className="flex flex-col gap-4">
+          <ProviderTabs providers={providers} value={provider} onChange={setPicked} />
           <ProviderHistory key={provider} provider={provider} range={range} view={view} />
-        </Tabs>
+        </div>
       )}
     </Section>
   );
@@ -139,7 +133,7 @@ function Legend({ averages: avg, color, cycles }: { averages: Averages[]; color:
           ) : null}
           {hasLow ? (
             <li className="flex items-center gap-1.5">
-              <Swatch color={color} faded /> Faded: low confidence
+              <Swatch color={color} faded /> Lighter: low confidence
             </li>
           ) : null}
           {hasHits ? (
@@ -172,7 +166,7 @@ function BigShare({ swatch, label, value, basis }: { swatch: React.ReactNode; la
 function Swatch({ color, neutral, estimated, faded }: { color?: string; neutral?: boolean; estimated?: boolean; faded?: boolean }) {
   return (
     <span
-      className={cn("inline-block size-2.5 shrink-0 rounded-[3px]", neutral && "bg-foreground/20", faded && "opacity-45")}
+      className={cn("inline-block size-2.5 shrink-0 rounded-[3px]", neutral && "bg-foreground/20", faded && "opacity-70")}
       style={neutral ? (estimated ? hatch("color-mix(in oklab, var(--foreground) 30%, transparent)", true) : undefined) : fill(color!, estimated)}
       aria-hidden
     />
@@ -243,7 +237,7 @@ function Column({ cycle: c, color, sparseLabel }: { cycle: HistoryCycle; color: 
             ) : null}
           </div>
           <div
-            className={cn("flex w-full flex-col justify-end gap-[2px]", c.lowConfidence && "opacity-45")}
+            className={cn("flex w-full flex-col justify-end gap-[2px]", c.lowConfidence && "opacity-70")}
             style={{ height: PLOT_HEIGHT }}
           >
             {rest > 0.0005 ? (
