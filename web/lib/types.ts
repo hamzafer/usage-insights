@@ -138,3 +138,35 @@ export interface ProjectsRange {
   to: string;
   providers: ProviderRanking[];
 }
+
+/** One reading in the hero chart: share of the allowance used at a time. */
+export interface HeroPoint {
+  at: string;
+  usedShare: number;
+  basis: Basis;
+}
+
+/** `GET /api/hero/:provider` (src/dashboard/hero.ts): one plan's current Cycle. */
+export interface HeroCycle {
+  provider: string;
+  label: string;
+  /** Every Cycle line of the Provider (pick one with `?label=`). */
+  labels: string[];
+  running: boolean;
+  /** The Cycle's start (the previous Reset); null while unknown. */
+  start: string | null;
+  resetsAt: string | null;
+  endedAt: string | null;
+  limitShare: 1;
+  readings: HeroPoint[];
+  /** The projection from the newest reading to the Reset; null while ended or without a rate yet. */
+  pace: {
+    points: { at: string; usedShare: number }[];
+    projectedShare: number;
+    expectedWaste: number;
+    projectedLimitHitAt: string | null;
+    basis: Basis;
+  } | null;
+  /** Stretches without readings: drawn as breaks, never as zero. */
+  gaps: { from: string; to: string }[];
+}

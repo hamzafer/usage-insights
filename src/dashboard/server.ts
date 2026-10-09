@@ -1,5 +1,6 @@
 import { claudeCalibration } from "../calibration.ts";
 import { DEFAULT_TOP_SESSIONS, MAX_TOP_SESSIONS, TOP_SESSION_RANGES, type TopSessionRange, topSessions } from "../top-sessions.ts";
+import { buildHero } from "./hero.ts";
 import { renderHealth, renderHistory, renderMessage, renderOverview, renderProjects, type PageContext } from "./render.ts";
 import { hasExport, serveStatic, staticNotFound } from "./static.ts";
 import { buildProjectsRange, isProjectsRange } from "./projects-range.ts";
@@ -95,6 +96,12 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
       return json(buildProjectsRange(data, at, range));
     }
     if (path === "/api/sessions/top") return sessionsTop(data, url.searchParams, at);
+    const hero = /^\/api\/hero\/([^/]+)$/.exec(path)?.[1];
+    if (hero !== undefined) {
+      const id = decodePathPart(hero);
+      const result = id === null ? null : buildHero(data, id, at, url.searchParams.get("label") ?? undefined);
+      return result ? json(result) : json({ error: "No Cycle recorded for this Provider" }, 404);
+    }
     if (provider !== undefined) {
       const id = decodePathPart(provider);
       const history = id === null ? null : buildHistory(data, id, at);
