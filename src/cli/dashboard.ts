@@ -8,16 +8,17 @@ import { dashboardPort, loadConfig } from "../config.ts";
 import { loadDashboardData } from "../dashboard/data.ts";
 import { dashboardHandler } from "../dashboard/server.ts";
 import { hasExport } from "../dashboard/static.ts";
-import { buildExport, isExportStale } from "../dashboard/web-build.ts";
+import { ensureExport } from "../dashboard/web-build.ts";
 
 const config = loadConfig();
 mkdirSync(config.dataDir, { recursive: true });
 
 const webDir = join(import.meta.dir, "..", "..", "web");
 const staticDir = join(webDir, "out");
-if (!process.argv.includes("--no-build") && isExportStale(webDir)) {
-  const failed = buildExport(webDir);
-  if (failed) console.error(`dashboard: could not build the app (${failed}); serving the last export, if any.`);
+if (!process.argv.includes("--no-build")) {
+  // One build at a time: a second start waits for the first one's build (web-build.ts).
+  const { error } = ensureExport(webDir);
+  if (error) console.error(`dashboard: could not build the app (${error}); serving the last export, if any.`);
 }
 if (!hasExport(staticDir)) {
   console.error("dashboard: no built app in web/out yet; pages will say so. Run `bun run web:build` (or drop --no-build).");

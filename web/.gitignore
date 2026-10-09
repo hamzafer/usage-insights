@@ -33,6 +33,10 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# dashboard build-on-demand (src/dashboard/web-build.ts)
+/.dashboard-build.lock
+/.dashboard-build.json
+
 # vercel
 .vercel
 
