@@ -31,7 +31,7 @@ bun run dashboard                           # open http://127.0.0.1:6740
 
 | Command | Does |
 |---|---|
-| `bun run dashboard` | Local dashboard: overview, history, projects, data health |
+| `bun run dashboard` | Local dashboard (builds the `web/` app when stale): plan tiles, analytics, data health |
 | `bun run summary` | Waste, Limit Hits, Overage and Pace in the terminal |
 | `bun run status` | Latest reading per provider |
 | `bun run report --dry-run` | Preview the weekly card without sending |

@@ -214,7 +214,7 @@ describe("bun run dashboard", () => {
   test("serves on 127.0.0.1 at USAGE_INSIGHTS_PORT", async () => {
     seed();
     const port = 46_000 + Math.floor(Math.random() * 1000);
-    const proc = Bun.spawn(["bun", "run", "dashboard"], {
+    const proc = Bun.spawn(["bun", "run", "dashboard", "--no-build"], {
       cwd: new URL("..", import.meta.url).pathname,
       env: { ...process.env, USAGE_INSIGHTS_DATA_DIR: dataDir, USAGE_INSIGHTS_PORT: String(port) },
       stdout: "pipe",

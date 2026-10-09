@@ -11,7 +11,9 @@
     "dashboard": "bun run src/cli/dashboard.ts",
     "report": "bun run src/cli/report.ts",
     "setup:draft": "bun run src/cli/setup-draft.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "web:dev": "bun run --cwd web dev",
+    "web:build": "bun run --cwd web build"
   },
   "devDependencies": {
     "@types/bun": "1.2.23",

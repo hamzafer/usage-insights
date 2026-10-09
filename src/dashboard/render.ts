@@ -21,7 +21,7 @@ export function renderOverview(providers: readonly ProviderOverview[], health: D
   const body = providers.length
     ? providers.map((p) => overviewSection(p, health, ctx)).join("")
     : `<p class="empty">No Cycles recorded yet. Start the Recorder (<code>bun run record</code>, or the launchd job in the README) and Snapshots will show up here.</p>`;
-  return page("Overview", "/", ctx, `<h1>Allowance use</h1>${healthBanner(health, ctx)}${body}${encodingKey()}`);
+  return page("Overview", "/legacy", ctx, `<h1>Allowance use</h1>${healthBanner(health, ctx)}${body}${encodingKey()}`);
 }
 
 export function renderHistory(h: ProviderHistory, ctx: PageContext): string {
@@ -385,7 +385,7 @@ function page(title: string, path: string, ctx: PageContext, body: string): stri
   const link = (href: string, text: string) =>
     `<a href="${href}"${href === path ? ' aria-current="page"' : ""}>${e(text)}</a>`;
   const nav = [
-    link("/", "Overview"),
+    link("/legacy", "Overview"),
     ...ctx.providers.map((p) => link(`/provider/${encodeURIComponent(p)}`, providerName(p))),
     link("/projects", "Projects and models"),
     link("/health", "Data health"),
