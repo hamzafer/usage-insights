@@ -1,3 +1,4 @@
+import { dateParts } from "./dates";
 import { clock, dayMonth, marker, percent } from "./format";
 import type { Basis, HeroCycle } from "./types";
 
@@ -86,15 +87,15 @@ export function timeTicks([from, to]: [number, number], max = 8): number[] {
 /** A tick label: "Tue 7" for day ticks, "14:00" for hour ticks. */
 export function tickLabel(t: number, [from, to]: [number, number], timeZone?: string): string {
   if (to - from <= 2 * DAY) return clock(new Date(t).toISOString(), timeZone);
-  const f = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", timeZone });
-  return f.format(t);
+  const p = dateParts(t, timeZone);
+  return `${p.weekday} ${p.day}`;
 }
 
 /** "Tue 7 Oct, 14:05": the tooltip's and table's time. */
 export function longTime(t: number | string, timeZone?: string): string {
   const ms = typeof t === "string" ? Date.parse(t) : t;
-  const day = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone }).format(ms);
-  return `${day}, ${clock(new Date(ms).toISOString(), timeZone)}`;
+  const p = dateParts(ms, timeZone);
+  return `${p.weekday} ${p.day} ${p.monthName}, ${p.hour}:${p.minute}`;
 }
 
 /** "2d 4h", "5h 10m", "12m"; "now" under a minute. */

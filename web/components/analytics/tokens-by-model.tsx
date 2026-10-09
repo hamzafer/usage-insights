@@ -13,8 +13,8 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useApi } from "@/hooks/use-api";
 import { api } from "@/lib/api";
 import { byProviderOrder, providerName } from "@/lib/providers";
+import { compactNumber } from "@/lib/format";
 import {
-  compactTokens,
   dayLabel,
   foldModels,
   fullTokens,
@@ -160,7 +160,7 @@ function TokensChart({ rows, series, config }: { rows: TokensRow[]; series: Mode
           className="font-mono text-[11px]"
         />
         <YAxis
-          tickFormatter={compactTokens}
+          tickFormatter={compactNumber}
           tickLine={false}
           axisLine={false}
           width={44}

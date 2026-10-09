@@ -11,7 +11,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useApi } from "@/hooks/use-api";
 import { api } from "@/lib/api";
 import { byProviderOrder, providerColor, providerName } from "@/lib/providers";
-import { compactTokens, limitText, sessionDuration, sessionStart } from "@/lib/top-sessions";
+import { compactNumber } from "@/lib/format";
+import { limitText, sessionDuration, sessionStart } from "@/lib/top-sessions";
 import type { TopSession } from "@/lib/types";
 
 const RANGE_TEXT: Record<string, string> = { "7d": "7 days", "30d": "30 days" };
@@ -120,7 +121,7 @@ function SessionRow({ session: s }: { session: TopSession }) {
         {s.modelName}
       </TableCell>
       <TableCell className="text-right font-mono tabular-nums" title={`${s.tokens.toLocaleString("en-US")} tokens in ${s.calls} calls`}>
-        {compactTokens(s.tokens)}
+        {compactNumber(s.tokens)}
       </TableCell>
       <LimitCell session={s} share={s.sessionShare} limit="5-hour" />
       <LimitCell session={s} share={s.weeklyShare} limit="weekly" className="pr-0" />

@@ -7,7 +7,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTr
 import { Skeleton } from "@/components/ui/skeleton";
 import { useApi } from "@/hooks/use-api";
 import { api } from "@/lib/api";
-import { clock, dayMonth } from "@/lib/format";
+import { clock, compactNumber, dayMonth } from "@/lib/format";
 import { ago, gapsToday, healthPill, jobName, type Pill, type PillTone, recentFailures } from "@/lib/health";
 import { byProviderOrder, providerColor, providerName } from "@/lib/providers";
 import type { DataHealth } from "@/lib/types";
@@ -187,7 +187,7 @@ function HealthDetails({ health, now }: { health: DataHealth; now: string }) {
                 {c.ready ? (
                   <StatusText tone="good">
                     ready
-                    {c.tokensPerPercent ? <span className="text-muted-foreground">, {compact(c.tokensPerPercent)} tokens per 1%</span> : null}
+                    {c.tokensPerPercent ? <span className="text-muted-foreground">, {compactNumber(c.tokensPerPercent)} tokens per 1%</span> : null}
                   </StatusText>
                 ) : (
                   <StatusText tone="warning">
@@ -269,8 +269,4 @@ function Code({ children }: { children: React.ReactNode }) {
 /** "5 Oct 14:05". */
 function when(iso: string): string {
   return `${dayMonth(iso)} ${clock(iso)}`;
-}
-
-function compact(n: number): string {
-  return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(n);
 }

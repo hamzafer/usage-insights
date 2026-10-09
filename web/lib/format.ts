@@ -1,3 +1,4 @@
+import { dateParts } from "./dates";
 import type { Basis, Pace } from "./types";
 
 /**
@@ -22,21 +23,21 @@ export function weekdayOrDate(iso: string, now: string, timeZone?: string): stri
   const at = Date.parse(iso);
   if (sameDay(iso, now, timeZone)) return "today";
   if (at - Date.parse(now) < 6 * DAY_MS && at >= Date.parse(now)) {
-    return new Intl.DateTimeFormat("en-GB", { weekday: "short", timeZone }).format(at);
+    return dateParts(at, timeZone).weekday;
   }
   return dayMonth(iso, timeZone);
 }
 
 /** "12 Oct". */
 export function dayMonth(iso: string, timeZone?: string): string {
-  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone }).format(Date.parse(iso));
+  const p = dateParts(iso, timeZone);
+  return `${p.day} ${p.monthName}`;
 }
 
 /** "14:05". */
 export function clock(iso: string, timeZone?: string): string {
-  return new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone }).format(
-    Date.parse(iso),
-  );
+  const p = dateParts(iso, timeZone);
+  return `${p.hour}:${p.minute}`;
 }
 
 /** "Resets Tue 14:00" within the week, "Resets 12 Oct" later, "No Reset reported" without one. */
@@ -75,7 +76,28 @@ export function deltaPoints(current: number, previous: number, basis: Basis = "m
   return { points, direction, text: `${marker(basis)}${sign}${Math.abs(points)} pts` };
 }
 
+/** The calendar day of `iso` in `timeZone`, as "2026-10-05": for grouping by day. */
+export function dayKey(iso: string, timeZone?: string): string {
+  const p = dateParts(iso, timeZone);
+  return `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
+}
+
+/** 950 → "950", 12_300 → "12.3K", 120_400 → "120K", 9_512_000 → "9.5M", 1.25e9 → "1.3B". */
+export function compactNumber(n: number): string {
+  const units: [number, string][] = [
+    [1e9, "B"],
+    [1e6, "M"],
+    [1e3, "K"],
+  ];
+  for (const [size, unit] of units) {
+    if (Math.abs(n) >= size) {
+      const v = n / size;
+      return `${Math.abs(v) >= 100 ? Math.round(v) : Number(v.toFixed(1))}${unit}`;
+    }
+  }
+  return String(Math.round(n));
+}
+
 function sameDay(a: string, b: string, timeZone?: string): boolean {
-  const f = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone });
-  return f.format(Date.parse(a)) === f.format(Date.parse(b));
+  return dayKey(a, timeZone) === dayKey(b, timeZone);
 }

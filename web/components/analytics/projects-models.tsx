@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useApi } from "@/hooks/use-api";
 import { api } from "@/lib/api";
-import { percent } from "@/lib/format";
+import { compactNumber, percent } from "@/lib/format";
 import { byProviderOrder, providerColor, providerName } from "@/lib/providers";
 import type { ProviderRanking, RankedShare } from "@/lib/types";
 
@@ -54,7 +54,7 @@ export function ProjectsModels({ range }: AnalyticsSectionProps) {
     <Frame
       description={
         current.total > 0
-          ? `${compactTokens(current.total)} tokens in the last ${days}`
+          ? `${compactNumber(current.total)} tokens in the last ${days}`
           : `No ${providerName(current.provider)} tokens in the last ${days}`
       }
       actions={
@@ -146,7 +146,7 @@ function RankedCard({
                     <span className="relative min-w-0 flex-1 truncate" title={row.label === row.name ? undefined : row.name}>
                       {row.label}
                     </span>
-                    <span className="relative shrink-0 font-medium tabular-nums">{compactTokens(row.tokens)}</span>
+                    <span className="relative shrink-0 font-medium tabular-nums">{compactNumber(row.tokens)}</span>
                     <span className="relative w-9 shrink-0 text-right text-muted-foreground tabular-nums">
                       {sharePercent(row.share)}
                     </span>
@@ -195,10 +195,6 @@ function ProjectsModelsSkeleton() {
   );
 }
 
-/** 1234 → "1.2K", 3_400_000 → "3.4M", 1.2e9 → "1.2B". */
-function compactTokens(n: number): string {
-  return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(n);
-}
 
 /** Like `percent`, but a small non-zero share reads "<1%" instead of "0%". */
 function sharePercent(share: number): string {
