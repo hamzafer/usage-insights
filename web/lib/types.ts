@@ -68,3 +68,39 @@ export interface Overview {
   now: string;
   providers: ProviderOverview[];
 }
+
+/** A Limit Hit inside a Cycle (of the Cycle itself or a Session in it). */
+export interface HistoryLimitHit {
+  role: "session" | "cycle";
+  label: string;
+  hitAt: string;
+  /** Blocked Time in ms; while still blocked, the time so far. */
+  blockedMs: number;
+  blockedUntil: string | null;
+  endedBy: "reset" | "overage" | "running";
+}
+
+/** One Cycle of the Waste and Limit history (src/dashboard/history.ts). */
+export interface HistoryCycle {
+  label: string;
+  /** Its start (the previous Reset); null when unknown. */
+  from: string | null;
+  /** When it ended, or when it is due while running. */
+  resetAt: string | null;
+  running: boolean;
+  usedShare: number;
+  /** Null while running. */
+  wasteShare: number | null;
+  basis: Basis;
+  lowConfidence: boolean;
+  /** Estimated from tokens: the Cycle's dates were stepped or assumed. */
+  inferred: boolean;
+  limitHits: HistoryLimitHit[];
+}
+
+/** `GET /api/history/:provider` */
+export interface CycleHistory {
+  provider: string;
+  /** Oldest first; the running Cycle last. */
+  cycles: HistoryCycle[];
+}

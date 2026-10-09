@@ -1,4 +1,5 @@
 import { renderHealth, renderHistory, renderMessage, renderOverview, renderProjects, type PageContext } from "./render.ts";
+import { buildCycleHistory } from "./history.ts";
 import { hasExport, serveStatic, staticNotFound } from "./static.ts";
 import { buildHealth, buildHistory, buildOverview, buildProjects, type DashboardData } from "./view-model.ts";
 
@@ -77,6 +78,12 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
     if (path === "/health") return html(renderHealth(buildHealth(data, at), ctx));
     if (path === "/api/overview") return json({ now: ctx.now, providers: overview() });
     if (path === "/api/health") return json(buildHealth(data, at));
+    const historyOf = /^\/api\/history\/([^/]+)$/.exec(path)?.[1];
+    if (historyOf !== undefined) {
+      const id = decodePathPart(historyOf);
+      const history = id === null ? null : buildCycleHistory(data, id, at);
+      return history ? json(history) : json({ error: "No Cycles recorded for this Provider" }, 404);
+    }
     if (path === "/projects") return html(renderProjects(buildProjects(data, at), ctx));
     if (path === "/api/projects") return json(buildProjects(data, at));
     if (provider !== undefined) {
