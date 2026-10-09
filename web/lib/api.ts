@@ -1,5 +1,5 @@
 import type { Range } from "./range";
-import type { HeroCycle, Overview, ProjectsRange, TokensDaily, TopSessions } from "./types";
+import type { CycleHistory, HeroCycle, Overview, ProjectsRange, TokensDaily, TopSessions } from "./types";
 
 /**
  * The JSON API client. Same origin: in production the Bun server serves the app and `/api/*`; in
@@ -43,4 +43,6 @@ export const api = {
       `/api/hero/${encodeURIComponent(provider)}${label ? `?label=${encodeURIComponent(label)}` : ""}`,
       init,
     ),
+  history: (provider: string, init?: RequestInit) =>
+    getJson<CycleHistory>(`/api/history/${encodeURIComponent(provider)}`, init),
 };

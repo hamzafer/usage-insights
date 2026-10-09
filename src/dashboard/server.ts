@@ -2,6 +2,7 @@ import { claudeCalibration } from "../calibration.ts";
 import { DEFAULT_TOP_SESSIONS, MAX_TOP_SESSIONS, TOP_SESSION_RANGES, type TopSessionRange, topSessions } from "../top-sessions.ts";
 import { buildHero } from "./hero.ts";
 import { renderHealth, renderHistory, renderMessage, renderOverview, renderProjects, type PageContext } from "./render.ts";
+import { buildCycleHistory } from "./history.ts";
 import { hasExport, serveStatic, staticNotFound } from "./static.ts";
 import { buildProjectsRange, isProjectsRange } from "./projects-range.ts";
 import { buildTokensDaily, isTokenRange } from "./tokens-daily.ts";
@@ -82,6 +83,12 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
     if (path === "/health") return html(renderHealth(buildHealth(data, at), ctx));
     if (path === "/api/overview") return json({ now: ctx.now, providers: overview() });
     if (path === "/api/health") return json(buildHealth(data, at));
+    const historyOf = /^\/api\/history\/([^/]+)$/.exec(path)?.[1];
+    if (historyOf !== undefined) {
+      const id = decodePathPart(historyOf);
+      const history = id === null ? null : buildCycleHistory(data, id, at);
+      return history ? json(history) : json({ error: "No Cycles recorded for this Provider" }, 404);
+    }
     if (path === "/projects") return html(renderProjects(buildProjects(data, at), ctx));
     if (path === "/api/tokens/daily") {
       const range = url.searchParams.get("range") ?? "7d";
