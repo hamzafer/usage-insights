@@ -4,7 +4,7 @@ import type { CycleOverage } from "../overage.ts";
 import type { Pace } from "../pace.ts";
 import { paceStatus, type Status } from "../pace-status.ts";
 import { idleCapacity, READING_GAP_TOLERANCE_MS } from "../sessions.ts";
-import type { Gap, RunOutcome, StoredReading, TokenEvent } from "../store.ts";
+import type { Gap, RunOutcome, SessionTokenEvent, StoredReading, TokenEvent } from "../store.ts";
 import { basisOfSource, LIVE_SOURCE } from "../providers.ts";
 import { type CycleTokens, tokensByCycle } from "../token-shares.ts";
 import { type Basis, deriveWindows, type Reading, type Waste, type Window } from "../window-model.ts";
@@ -26,6 +26,8 @@ export interface DashboardData {
   tokens?: TokenEvent[];
   /** The newest Backfill and Report run outcomes, newest first; none when omitted. */
   runs?: RunOutcome[];
+  /** Token events with their session (top sessions), oldest first; none when omitted. */
+  sessionTokens?: SessionTokenEvent[];
 }
 
 export interface CycleResult {

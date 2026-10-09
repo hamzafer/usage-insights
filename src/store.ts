@@ -43,6 +43,16 @@ export interface TokenEvent {
 /** A TokenEvent with the key it is deduplicated on (e.g. message and request id). */
 export interface KeyedTokenEvent extends TokenEvent {
   key: string;
+  /**
+   * The Claude Code session (`sessionId`) or Codex session (its `session_meta` id) the call belongs
+   * to; null or omitted when the log does not say.
+   */
+  session?: string | null;
+}
+
+/** A TokenEvent with its session (ticket #21: top sessions); null for calls stored without one. */
+export interface SessionTokenEvent extends TokenEvent {
+  session: string | null;
 }
 
 /** A recording run that got no Snapshot, and why (ADR 0001: gaps must be visible). */
@@ -133,6 +143,12 @@ export const MIGRATIONS: string[] = [
   // the parser state at the offset, so a rerun need not read the file's earlier lines again.
   `ALTER TABLE backfill_progress ADD COLUMN head TEXT;
    ALTER TABLE backfill_progress ADD COLUMN context TEXT;`,
+  // The session of each token event (ticket #21). The token Backfill's progress is reset, so its
+  // next run reads every log again and fills the session of events stored before; their keys stay
+  // the same, so nothing is counted twice.
+  `ALTER TABLE token_events ADD COLUMN session TEXT;
+   CREATE INDEX token_events_by_session ON token_events (provider, session);
+   DELETE FROM backfill_progress WHERE source LIKE 'tokens:%';`,
 ];
 
 /** How long a statement waits for another process's lock before failing. */
@@ -157,12 +173,14 @@ export interface Store {
   backfillProgress(source: string, path: string): BackfillProgress | null;
   saveBackfillProgress(source: string, path: string, progress: BackfillProgress): void;
   /**
-   * Stores token events, one per key; a key seen again keeps its earliest time. Returns how many
-   * keys were new.
+   * Stores token events, one per key; a key seen again keeps its earliest time and gets its session
+   * when it had none. Returns how many keys were new.
    */
   saveTokenEvents(events: KeyedTokenEvent[]): number;
   /** Token events, oldest first; only those at or after `from` and before `to` when given. */
   tokenUsage(range?: { from?: string; to?: string }): TokenEvent[];
+  /** As tokenUsage, with each event's session. */
+  sessionTokenUsage(range?: { from?: string; to?: string }): SessionTokenEvent[];
   saveRun(outcome: RunOutcome): void;
   /** The newest run outcomes first. */
   recentRuns(limit: number): RunOutcome[];
@@ -199,16 +217,20 @@ export function openStore(path: string, options: { readonly?: boolean } = {}): S
   });
 
   const insertToken = db.prepare(
-    `INSERT OR IGNORE INTO token_events (key, provider, at, project, model, input, cache_write, cache_read, output)
-     VALUES ($key, $provider, $at, $project, $model, $input, $cacheWrite, $cacheRead, $output)`,
+    `INSERT OR IGNORE INTO token_events (key, provider, at, project, model, input, cache_write, cache_read, output, session)
+     VALUES ($key, $provider, $at, $project, $model, $input, $cacheWrite, $cacheRead, $output, $session)`,
   );
   const keepEarliest = db.prepare("UPDATE token_events SET at = $at WHERE key = $key AND at > $at");
+  const fillSession = db.prepare("UPDATE token_events SET session = $session WHERE key = $key AND session IS NULL");
   const saveTokens = db.transaction((events: KeyedTokenEvent[]) => {
     let added = 0;
     for (const e of events) {
-      const changes = insertToken.run({ ...e }).changes;
+      const session = e.session ?? null;
+      const changes = insertToken.run({ ...e, session }).changes;
       added += changes;
-      if (!changes) keepEarliest.run({ key: e.key, at: e.at });
+      if (changes) continue;
+      keepEarliest.run({ key: e.key, at: e.at });
+      if (session !== null) fillSession.run({ key: e.key, session });
     }
     return added;
   });
@@ -220,6 +242,13 @@ export function openStore(path: string, options: { readonly?: boolean } = {}): S
       db
         .query<TokenEvent, [string, string]>(
           `SELECT provider, at, project, model, input, cache_write AS cacheWrite, cache_read AS cacheRead, output
+             FROM token_events WHERE at >= ? AND at < ? ORDER BY at, id`,
+        )
+        .all(from, to),
+    sessionTokenUsage: ({ from = "", to = "\uffff" } = {}) =>
+      db
+        .query<SessionTokenEvent, [string, string]>(
+          `SELECT provider, at, project, model, input, cache_write AS cacheWrite, cache_read AS cacheRead, output, session
              FROM token_events WHERE at >= ? AND at < ? ORDER BY at, id`,
         )
         .all(from, to),

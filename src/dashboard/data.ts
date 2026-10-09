@@ -19,6 +19,7 @@ export function loadDashboardData(dbPath: string): DashboardData {
       gaps: store.allGaps(),
       tokens: store.tokenUsage(),
       runs: store.recentRuns(RECENT_RUNS),
+      sessionTokens: store.sessionTokenUsage(),
     };
   } finally {
     store.close();
