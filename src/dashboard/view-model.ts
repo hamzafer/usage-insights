@@ -30,6 +30,17 @@ export interface DashboardData {
   sessionTokens?: SessionTokenEvent[];
 }
 
+/**
+ * Which token rows one request needs, so a page view loads only those (token rows are the biggest
+ * table). Readings, gaps and runs are always loaded.
+ */
+export interface DataNeeds {
+  /** "none"; "all" (the Claude calibration uses every row); or only rows at or after `from`. */
+  tokens: "none" | "all" | { from: string };
+  /** Token rows with their session (top sessions); they then also serve as `tokens`. */
+  sessionTokens?: boolean;
+}
+
 export interface CycleResult {
   label: string;
   endedAt: string;

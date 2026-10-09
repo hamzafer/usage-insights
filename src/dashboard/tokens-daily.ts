@@ -39,6 +39,14 @@ export interface TokensDaily {
 const DAY_MS = 24 * 3_600_000;
 const WIDEST = Math.max(...Object.values(TOKEN_RANGES));
 
+/**
+ * The oldest token row buildTokensDaily can use (the widest range, plus slack for time zones), so
+ * the server reads only those rows.
+ */
+export function tokensDailyFrom(now: string | Date): string {
+  return new Date(new Date(now).getTime() - (WIDEST + 3) * DAY_MS).toISOString();
+}
+
 export function buildTokensDaily(
   events: readonly TokenEvent[],
   range: TokenRange,

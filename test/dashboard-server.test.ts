@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadDashboardData } from "../src/dashboard/data.ts";
 import { dashboardHandler } from "../src/dashboard/server.ts";
+import type { DataNeeds } from "../src/dashboard/view-model.ts";
 import { openStore } from "../src/store.ts";
 import { NOW, reading, stored, SYNTHETIC_GAPS, syntheticReadings, tokenEvent } from "./dashboard-fixtures.ts";
 
@@ -142,6 +143,63 @@ describe("API", () => {
     const res = await failing(new Request("http://127.0.0.1/api/overview"));
     expect(res.status).toBe(500);
     expect(await res.text()).toContain("database is locked");
+  });
+
+  test("each endpoint asks only for the token rows it needs", async () => {
+    const asked: Record<string, DataNeeds | undefined> = {};
+    let path = "";
+    const spy = dashboardHandler({
+      load: (needs) => {
+        asked[path] = needs;
+        return loadDashboardData(dbPath, needs);
+      },
+      now: () => new Date(NOW),
+      timeZone: "UTC",
+    });
+    seed();
+    for (path of ["/api/overview", "/api/hero/codex", "/api/provider/codex", "/api/health", "/api/last-week", "/api/projects?range=7d", "/api/tokens/daily?range=7d", "/api/sessions/top?range=7d"]) {
+      await spy(new Request(`http://127.0.0.1${path}`));
+    }
+    // Overview, hero and Provider history never touch token rows.
+    expect(asked["/api/overview"]).toEqual({ tokens: "none" });
+    expect(asked["/api/hero/codex"]).toEqual({ tokens: "none" });
+    expect(asked["/api/provider/codex"]).toEqual({ tokens: "none" });
+    // Health and the Last week line need the Claude calibration, which uses every token row.
+    expect(asked["/api/health"]).toEqual({ tokens: "all" });
+    expect(asked["/api/last-week"]).toEqual({ tokens: "all" });
+    // Ranges read only their own days (plus slack for time zones).
+    expect(asked["/api/projects?range=7d"]).toEqual({ tokens: { from: "2026-09-28T12:00:00.000Z" } });
+    expect(asked["/api/tokens/daily?range=7d"]).toEqual({ tokens: { from: "2026-09-02T12:00:00.000Z" } });
+    // Only top sessions loads session rows, and they serve as the token rows too (one query).
+    expect(asked["/api/sessions/top?range=7d"]).toEqual({ tokens: "all", sessionTokens: true });
+  });
+
+  test("the data load reads token rows only as asked", () => {
+    const store = openStore(dbPath);
+    store.saveTokenEvents([
+      { ...tokenEvent("codex", "2026-09-01T10:00:00.000Z", "/repos/alpha", "gpt-5-codex", 100), key: "k1", session: "s1" },
+      { ...tokenEvent("codex", "2026-10-04T10:00:00.000Z", "/repos/alpha", "gpt-5-codex", 200), key: "k2", session: "s2" },
+    ]);
+    store.close();
+    expect(loadDashboardData(dbPath, { tokens: "none" }).tokens).toEqual([]);
+    expect(loadDashboardData(dbPath, { tokens: { from: "2026-10-01T00:00:00.000Z" } }).tokens!.map((e) => e.at)).toEqual([
+      "2026-10-04T10:00:00.000Z",
+    ]);
+    expect(loadDashboardData(dbPath, { tokens: "all" }).tokens).toHaveLength(2);
+    const sessions = loadDashboardData(dbPath, { tokens: "all", sessionTokens: true });
+    expect(sessions.sessionTokens!.map((e) => e.session)).toEqual(["s1", "s2"]);
+    expect(sessions.tokens).toBe(sessions.sessionTokens!);
+  });
+
+  test("Last week: the Report's week numbers for the Overview line", async () => {
+    seed();
+    const res = await get("/api/last-week");
+    expect(res.status).toBe(200);
+    const week = JSON.parse(res.body);
+    expect(week.to).toBe(NOW);
+    expect(week).toHaveProperty("cycles");
+    expect(week.limitHits.count).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(week.overage)).toBe(true);
   });
 
   test("without a built export, pages say how to build the app (never old HTML)", async () => {

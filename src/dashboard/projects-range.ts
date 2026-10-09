@@ -44,10 +44,14 @@ export interface ProjectsRange {
  * The ranked lists for the last `range` days, for every Provider that has token logs at all (so its
  * tab stays while the range is quiet).
  */
+/** The start of the range ending at `now`: the oldest token row the range uses. */
+export function projectsRangeFrom(now: string | Date, range: ProjectsRangeKey): string {
+  return new Date(new Date(now).getTime() - PROJECT_RANGE_DAYS[range] * DAY_MS).toISOString();
+}
+
 export function buildProjectsRange(data: DashboardData, now: string | Date, range: ProjectsRangeKey): ProjectsRange {
-  const toMs = typeof now === "string" ? Date.parse(now) : now.getTime();
-  const to = new Date(toMs).toISOString();
-  const from = new Date(toMs - PROJECT_RANGE_DAYS[range] * DAY_MS).toISOString();
+  const to = new Date(now).toISOString();
+  const from = projectsRangeFrom(now, range);
   const events = data.tokens ?? [];
   const providers = [...new Set(events.map((e) => e.provider))].toSorted();
   return {
