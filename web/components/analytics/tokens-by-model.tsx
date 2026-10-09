@@ -9,6 +9,7 @@ import { Section } from "@/components/section";
 import { ApiErrorState, EmptyState } from "@/components/states";
 import { type ChartConfig, ChartContainer, ChartTooltip } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useApi } from "@/hooks/use-api";
 import { api } from "@/lib/api";
@@ -218,43 +219,44 @@ function DayTooltip({ row, series }: { row: TokensRow; series: ModelSeries[] }) 
 
 function TokensTable({ rows, series }: { rows: TokensRow[]; series: ModelSeries[] }) {
   return (
-    <div className="max-h-80 overflow-auto rounded-lg border">
-      <table className="w-full text-[13px]">
-        <caption className="sr-only">Tokens per day by model</caption>
-        <thead className="sticky top-0 bg-card">
-          <tr className="border-b text-left text-muted-foreground">
-            <th scope="col" className="px-3 py-2 font-normal">
+    // The outer box scrolls both ways, so the table's own container must not (the header stays sticky).
+    <div className="max-h-80 overflow-auto rounded-lg border [&_[data-slot=table-container]]:overflow-visible">
+      <Table className="text-[13px]">
+        <TableCaption className="sr-only">Tokens per day by model</TableCaption>
+        <TableHeader className="sticky top-0 bg-card">
+          <TableRow className="hover:bg-transparent">
+            <TableHead scope="col" className="h-9 px-3 font-normal text-muted-foreground">
               Day
-            </th>
+            </TableHead>
             {series.map((s) => (
-              <th key={s.key} scope="col" className="px-3 py-2 text-right font-normal whitespace-nowrap">
+              <TableHead key={s.key} scope="col" className="h-9 px-3 text-right font-normal text-muted-foreground">
                 <span className="inline-flex items-center gap-1.5">
                   <Dot seriesKey={s.key} />
                   {s.name}
                 </span>
-              </th>
+              </TableHead>
             ))}
-            <th scope="col" className="px-3 py-2 text-right font-normal">
+            <TableHead scope="col" className="h-9 px-3 text-right font-normal text-muted-foreground">
               Total
-            </th>
-          </tr>
-        </thead>
-        <tbody className="font-mono tabular-nums">
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody className="font-mono tabular-nums">
           {rows.toReversed().map((r) => (
-            <tr key={r.date} className="border-b last:border-0">
-              <th scope="row" className="px-3 py-1.5 text-left font-sans font-normal whitespace-nowrap">
+            <TableRow key={r.date}>
+              <TableHead scope="row" className="h-auto px-3 py-1.5 font-sans font-normal">
                 {longDayLabel(r.date)}
-              </th>
+              </TableHead>
               {series.map((s) => (
-                <td key={s.key} className="px-3 py-1.5 text-right">
+                <TableCell key={s.key} className="px-3 py-1.5 text-right">
                   {fullTokens((r[s.key] as number | undefined) ?? 0)}
-                </td>
+                </TableCell>
               ))}
-              <td className="px-3 py-1.5 text-right">{fullTokens(r.total)}</td>
-            </tr>
+              <TableCell className="px-3 py-1.5 text-right">{fullTokens(r.total)}</TableCell>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }

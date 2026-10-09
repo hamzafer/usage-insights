@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import type { AnalyticsSectionProps } from "@/components/analytics/types";
 import { ProviderTabs } from "@/components/provider-tabs";
 import { ApiErrorState, EmptyState } from "@/components/states";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useApi } from "@/hooks/use-api";
@@ -165,14 +166,15 @@ function RankedCard({
         </ol>
       )}
       {rows.length > TOP ? (
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => setExpanded((v) => !v)}
-          className="mx-2 mb-2 rounded-md px-2 py-1.5 text-left text-[13px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+          className="mx-2 mb-2 justify-start px-2 text-[13px] font-normal text-muted-foreground"
           aria-expanded={expanded}
         >
           {expanded ? "Show fewer" : `${hidden} more ${noun}`}
-        </button>
+        </Button>
       ) : null}
     </div>
   );

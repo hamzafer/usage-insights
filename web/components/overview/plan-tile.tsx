@@ -28,6 +28,8 @@ export function PlanTile({
   onSelect: () => void;
 }) {
   const { running } = tile;
+  // A selectable card, not an action button: shadcn's Button (fixed height, nowrap, centered row)
+  // fights the tile's stacked layout, so this stays a semantic <button> with aria-pressed.
   return (
     <button
       type="button"
