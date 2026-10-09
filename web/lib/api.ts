@@ -1,5 +1,5 @@
 import type { Range } from "./range";
-import type { Overview, ProjectsRange, TokensDaily } from "./types";
+import type { Overview, ProjectsRange, TokensDaily, TopSessions } from "./types";
 
 /**
  * The JSON API client. Same origin: in production the Bun server serves the app and `/api/*`; in
@@ -36,4 +36,6 @@ export const api = {
   overview: (init?: RequestInit) => getJson<Overview>("/api/overview", init),
   tokensDaily: (range: Range, init?: RequestInit) => getJson<TokensDaily>(`/api/tokens/daily?range=${range}`, init),
   projects: (range: Range, init?: RequestInit) => getJson<ProjectsRange>(`/api/projects?range=${range}`, init),
+  topSessions: (range: string, init?: RequestInit) =>
+    getJson<TopSessions>(`/api/sessions/top?range=${encodeURIComponent(range)}`, init),
 };

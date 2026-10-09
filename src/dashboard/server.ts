@@ -1,3 +1,5 @@
+import { claudeCalibration } from "../calibration.ts";
+import { DEFAULT_TOP_SESSIONS, MAX_TOP_SESSIONS, TOP_SESSION_RANGES, type TopSessionRange, topSessions } from "../top-sessions.ts";
 import { renderHealth, renderHistory, renderMessage, renderOverview, renderProjects, type PageContext } from "./render.ts";
 import { hasExport, serveStatic, staticNotFound } from "./static.ts";
 import { buildProjectsRange, isProjectsRange } from "./projects-range.ts";
@@ -92,6 +94,7 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
       if (!isProjectsRange(range)) return json({ error: "range must be 7d or 30d" }, 400);
       return json(buildProjectsRange(data, at, range));
     }
+    if (path === "/api/sessions/top") return sessionsTop(data, url.searchParams, at);
     if (provider !== undefined) {
       const id = decodePathPart(provider);
       const history = id === null ? null : buildHistory(data, id, at);
@@ -106,6 +109,27 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
       ? json({ error: "Not found" }, 404)
       : html(renderMessage("Page not found", "Pick a page from the navigation above.", ctx), 404);
   };
+}
+
+/** `GET /api/sessions/top?range=7d|30d&limit=10`: the range's biggest sessions (ticket #21). */
+function sessionsTop(data: DashboardData, params: URLSearchParams, at: Date): Response {
+  const range = params.get("range") ?? "7d";
+  if (!Object.hasOwn(TOP_SESSION_RANGES, range)) return json({ error: "range must be 7d or 30d" }, 400);
+  const limitParam = params.get("limit");
+  const limit = limitParam === null ? DEFAULT_TOP_SESSIONS : Number(limitParam);
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_TOP_SESSIONS) {
+    return json({ error: `limit must be a whole number from 1 to ${MAX_TOP_SESSIONS}` }, 400);
+  }
+  const { calibrations } = claudeCalibration(data.readings, data.tokens ?? [], at);
+  const sessions = topSessions({
+    events: data.sessionTokens ?? [],
+    readings: data.readings,
+    calibrations,
+    now: at,
+    range: range as TopSessionRange,
+    limit,
+  });
+  return json({ now: at.toISOString(), range, sessions });
 }
 
 /** The old server-rendered pages, removed once the new app covers them (#22). */
