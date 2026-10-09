@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { HeroChart } from "@/components/overview/hero-chart";
+import { LastWeekRow } from "@/components/overview/last-week";
 import { PlanTiles, PlanTilesSkeleton } from "@/components/overview/plan-tiles";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiErrorState, EmptyState } from "@/components/states";
@@ -11,7 +12,7 @@ import { clock, dayMonth } from "@/lib/format";
 import { planTiles } from "@/lib/plan-tiles";
 
 /**
- * Overview: plan tiles, then the hero chart of the selected plan. Sections below the hero each
+ * Overview: plan tiles, the hero chart of the selected plan, then the quiet Last week row. Sections below the hero each
  * get one line here and their own component file.
  */
 export function OverviewPage() {
@@ -55,6 +56,7 @@ export function OverviewPage() {
     <Page updatedAt={data.now}>
       <PlanTiles overview={data} tiles={tiles} selected={plan.key} onSelect={setPicked} />
       <HeroChart plan={plan} overview={data} />
+      <LastWeekRow />
     </Page>
   );
 }
