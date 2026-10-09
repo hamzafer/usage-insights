@@ -179,6 +179,8 @@ export interface Store {
   saveTokenEvents(events: KeyedTokenEvent[]): number;
   /** Token events, oldest first; only those at or after `from` and before `to` when given. */
   tokenUsage(range?: { from?: string; to?: string }): TokenEvent[];
+  /** Every Provider with token events, sorted (without reading the events). */
+  tokenProviders(): string[];
   /** As tokenUsage, with each event's session. */
   sessionTokenUsage(range?: { from?: string; to?: string }): SessionTokenEvent[];
   saveRun(outcome: RunOutcome): void;
@@ -189,9 +191,21 @@ export interface Store {
   close(): void;
 }
 
+/** A read-only open found a data file from an older version, which only a normal open migrates. */
+export class OutdatedStoreError extends Error {
+  constructor(path: string, version: number) {
+    super(
+      `The data file ${path} is from an older version (schema ${version} of ${MIGRATIONS.length}) and a read-only ` +
+        "open cannot update it. Run any recording command once (e.g. `bun run record`) to migrate it, then try again.",
+    );
+    this.name = "OutdatedStoreError";
+  }
+}
+
 /**
- * Opens (creating and migrating) the store at `path`. `readonly`: for dry runs, which write nothing;
- * the file must exist, and it is neither migrated nor switched to WAL (writes then throw).
+ * Opens (creating and migrating) the store at `path`. `readonly`: for dry runs and page views, which
+ * write nothing; the file must exist and be migrated already (else OutdatedStoreError), and it is
+ * neither migrated nor switched to WAL (writes then throw).
  */
 export function openStore(path: string, options: { readonly?: boolean } = {}): Store {
   const db = options.readonly
@@ -203,6 +217,10 @@ export function openStore(path: string, options: { readonly?: boolean } = {}): S
   if (!options.readonly) {
     useWal(db);
     migrate(db);
+  } else if (userVersion(db) < MIGRATIONS.length) {
+    const version = userVersion(db);
+    db.close();
+    throw new OutdatedStoreError(path, version);
   }
 
   const insert = db.prepare(
@@ -245,6 +263,11 @@ export function openStore(path: string, options: { readonly?: boolean } = {}): S
              FROM token_events WHERE at >= ? AND at < ? ORDER BY at, id`,
         )
         .all(from, to),
+    tokenProviders: () =>
+      db
+        .query<{ provider: string }, []>("SELECT DISTINCT provider FROM token_events ORDER BY provider")
+        .all()
+        .map((r) => r.provider),
     sessionTokenUsage: ({ from = "", to = "\uffff" } = {}) =>
       db
         .query<SessionTokenEvent, [string, string]>(

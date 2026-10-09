@@ -32,7 +32,7 @@ function seed() {
 }
 
 async function get(path: string) {
-  const handler = dashboardHandler({ load: () => loadDashboardData(dbPath), now: () => new Date(NOW), timeZone: "UTC" });
+  const handler = dashboardHandler({ load: (needs) => loadDashboardData(dbPath, needs), now: () => new Date(NOW), timeZone: "UTC" });
   const res = await handler(new Request(`http://127.0.0.1:6740${path}`));
   return { status: res.status, body: (await res.json()) as any };
 }

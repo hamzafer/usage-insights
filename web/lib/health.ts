@@ -1,3 +1,4 @@
+import { dayKey } from "./format";
 import type { DataHealth, RunOutcome } from "./types";
 
 /**
@@ -73,6 +74,3 @@ export function jobName(job: string): string {
   return ({ "backfill:codex": "Codex Backfill", "backfill:tokens": "Token Backfill", report: "Report" } as Record<string, string>)[job] ?? job;
 }
 
-function dayKey(iso: string, timeZone?: string): string {
-  return new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone }).format(Date.parse(iso));
-}

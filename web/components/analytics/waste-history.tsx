@@ -7,6 +7,7 @@ import { ProviderTabs } from "@/components/provider-tabs";
 import { Section } from "@/components/section";
 import { ApiErrorState, EmptyState } from "@/components/states";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useApi } from "@/hooks/use-api";
@@ -220,6 +221,8 @@ function Column({ cycle: c, color, sparseLabel }: { cycle: HistoryCycle; color: 
   const used = Math.min(1, Math.max(0, c.usedShare));
   const rest = c.running ? 1 - used : Math.max(0, c.wasteShare ?? 0);
   const blocked = blockedTotal(c);
+  // A chart column, not an action: a plain <button> keeps the tooltip keyboard-reachable without
+  // Button's fixed height and centered row layout, which would fight the stacked bar.
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -298,43 +301,39 @@ function CycleTooltip({ cycle: c }: { cycle: HistoryCycle }) {
 
 function HistoryTable({ cycles }: { cycles: HistoryCycle[] }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-[13px]">
-        <thead>
-          <tr className="border-b text-left text-xs text-muted-foreground">
-            <th className="py-2 pr-4 font-normal">Cycle</th>
-            <th className="py-2 pr-4 text-right font-normal">Used</th>
-            <th className="py-2 pr-4 text-right font-normal">Wasted</th>
-            <th className="py-2 pr-4 font-normal">Basis</th>
-            <th className="py-2 font-normal">Limit Hits</th>
-          </tr>
-        </thead>
-        <tbody>
-          {cycles.toReversed().map((c, i) => (
-            <tr key={`${c.resetAt}-${i}`} className="border-b last:border-0">
-              <td className="py-2 pr-4 whitespace-nowrap">{span(c)}</td>
-              <td className="py-2 pr-4 text-right font-mono tabular-nums">
-                {marker(c.basis)}
-                {percent(c.usedShare)}
-              </td>
-              <td className="py-2 pr-4 text-right font-mono tabular-nums">
-                {c.wasteShare === null ? <span className="text-muted-foreground">running</span> : `${marker(c.basis)}${percent(c.wasteShare)}`}
-              </td>
-              <td className="py-2 pr-4 text-muted-foreground">
-                {c.basis === "estimated" ? "Estimated" : "Measured"}
-                {c.lowConfidence ? ", low confidence" : ""}
-                {c.inferred ? ", dates inferred" : ""}
-              </td>
-              <td className="py-2 text-muted-foreground">
-                {c.limitHits.length === 0
-                  ? "none"
-                  : `${c.limitHits.length}, blocked ${blockedText(blockedTotal(c))}`}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Table className="text-[13px]">
+      <TableHeader>
+        <TableRow className="text-xs hover:bg-transparent">
+          <TableHead className="pl-0 font-normal text-muted-foreground">Cycle</TableHead>
+          <TableHead className="text-right font-normal text-muted-foreground">Used</TableHead>
+          <TableHead className="text-right font-normal text-muted-foreground">Wasted</TableHead>
+          <TableHead className="font-normal text-muted-foreground">Basis</TableHead>
+          <TableHead className="pr-0 font-normal text-muted-foreground">Limit Hits</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {cycles.toReversed().map((c, i) => (
+          <TableRow key={`${c.resetAt}-${i}`}>
+            <TableCell className="pl-0">{span(c)}</TableCell>
+            <TableCell className="text-right font-mono tabular-nums">
+              {marker(c.basis)}
+              {percent(c.usedShare)}
+            </TableCell>
+            <TableCell className="text-right font-mono tabular-nums">
+              {c.wasteShare === null ? <span className="text-muted-foreground">running</span> : `${marker(c.basis)}${percent(c.wasteShare)}`}
+            </TableCell>
+            <TableCell className="text-muted-foreground">
+              {c.basis === "estimated" ? "Estimated" : "Measured"}
+              {c.lowConfidence ? ", low confidence" : ""}
+              {c.inferred ? ", dates inferred" : ""}
+            </TableCell>
+            <TableCell className="pr-0 text-muted-foreground">
+              {c.limitHits.length === 0 ? "none" : `${c.limitHits.length}, blocked ${blockedText(blockedTotal(c))}`}
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   );
 }
 

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Database } from "bun:sqlite";
-import { MIGRATIONS, openStore } from "../src/store.ts";
+import { MIGRATIONS, openStore, OutdatedStoreError } from "../src/store.ts";
 import { holdWriteLock } from "./sqlite-lock.ts";
 
 const dir = mkdtempSync(join(tmpdir(), "usage-insights-test-"));
@@ -69,6 +69,21 @@ test("a read-only store (dry runs) reads but never writes, migrates or creates",
   const store = openStore(path, { readonly: true });
   expect(store.countReadings()).toBe(0);
   expect(() => store.saveRun({ job: "report", at: "2026-01-05T10:00:00.000Z", ok: true, reason: null })).toThrow();
+  store.close();
+});
+
+test("a read-only open of a data file from an older version fails with a clear message, not a SQL error", () => {
+  const path = join(mkdtempSync(join(tmpdir(), "usage-insights-test-")), "usage.db");
+  const old = new Database(path, { create: true });
+  old.exec(MIGRATIONS[0]!);
+  old.exec("PRAGMA user_version = 1");
+  old.close();
+  expect(() => openStore(path, { readonly: true })).toThrow(OutdatedStoreError);
+  expect(() => openStore(path, { readonly: true })).toThrow(/older version.*bun run record/);
+  // A normal open migrates it; read-only works after that.
+  openStore(path).close();
+  const store = openStore(path, { readonly: true });
+  expect(store.countReadings()).toBe(0);
   store.close();
 });
 

@@ -4,11 +4,12 @@ import { useCallback, useState } from "react";
 import type { AnalyticsSectionProps } from "@/components/analytics/types";
 import { ProviderTabs } from "@/components/provider-tabs";
 import { ApiErrorState, EmptyState } from "@/components/states";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useApi } from "@/hooks/use-api";
 import { api } from "@/lib/api";
-import { percent } from "@/lib/format";
+import { compactNumber, percent } from "@/lib/format";
 import { byProviderOrder, providerColor, providerName } from "@/lib/providers";
 import type { ProviderRanking, RankedShare } from "@/lib/types";
 
@@ -54,7 +55,7 @@ export function ProjectsModels({ range }: AnalyticsSectionProps) {
     <Frame
       description={
         current.total > 0
-          ? `${compactTokens(current.total)} tokens in the last ${days}`
+          ? `${compactNumber(current.total)} tokens in the last ${days}`
           : `No ${providerName(current.provider)} tokens in the last ${days}`
       }
       actions={
@@ -146,7 +147,7 @@ function RankedCard({
                     <span className="relative min-w-0 flex-1 truncate" title={row.label === row.name ? undefined : row.name}>
                       {row.label}
                     </span>
-                    <span className="relative shrink-0 font-medium tabular-nums">{compactTokens(row.tokens)}</span>
+                    <span className="relative shrink-0 font-medium tabular-nums">{compactNumber(row.tokens)}</span>
                     <span className="relative w-9 shrink-0 text-right text-muted-foreground tabular-nums">
                       {sharePercent(row.share)}
                     </span>
@@ -165,14 +166,15 @@ function RankedCard({
         </ol>
       )}
       {rows.length > TOP ? (
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => setExpanded((v) => !v)}
-          className="mx-2 mb-2 rounded-md px-2 py-1.5 text-left text-[13px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+          className="mx-2 mb-2 justify-start px-2 text-[13px] font-normal text-muted-foreground"
           aria-expanded={expanded}
         >
           {expanded ? "Show fewer" : `${hidden} more ${noun}`}
-        </button>
+        </Button>
       ) : null}
     </div>
   );
@@ -195,10 +197,6 @@ function ProjectsModelsSkeleton() {
   );
 }
 
-/** 1234 → "1.2K", 3_400_000 → "3.4M", 1.2e9 → "1.2B". */
-function compactTokens(n: number): string {
-  return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(n);
-}
 
 /** Like `percent`, but a small non-zero share reads "<1%" instead of "0%". */
 function sharePercent(share: number): string {

@@ -14,19 +14,6 @@ export function limitText(share: number | null, basis: Basis | null): string {
   return `${tilde}${Math.round(share * 100)}%`;
 }
 
-/** 950 → "950", 12 300 → "12.3K", 30 817 200 → "30.8M". */
-export function compactTokens(n: number): string {
-  const units: [number, string][] = [
-    [1e9, "B"],
-    [1e6, "M"],
-    [1e3, "K"],
-  ];
-  for (const [size, unit] of units) {
-    if (n >= size) return `${Number((n / size).toFixed(1))}${unit}`;
-  }
-  return String(Math.round(n));
-}
-
 /** "7 Oct 09:05". */
 export function sessionStart(iso: string, timeZone?: string): string {
   return `${dayMonth(iso, timeZone)} ${clock(iso, timeZone)}`;

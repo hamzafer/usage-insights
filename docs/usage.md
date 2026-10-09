@@ -40,7 +40,11 @@ Recorded data never lives in the repo (ADR 0002). It goes to
 bun run dashboard   # then open http://127.0.0.1:6740
 ```
 
-![Overview (sample data)](images/dashboard.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/dashboard.png">
+  <source media="(prefers-color-scheme: light)" srcset="images/dashboard-light.png">
+  <img alt="Overview (sample data)" src="images/dashboard.png">
+</picture>
 
 It listens on `127.0.0.1` only (ADR 0002), refuses other Host names (DNS rebinding), and reads
 the data directory on every request, so reload for new Snapshots.
@@ -48,7 +52,9 @@ the data directory on every request, so reload for new Snapshots.
 The dashboard is a Next.js app in `web/`, built as a static export (`web/out`, ADR 0003) and
 served by the same Bun process as the JSON API. `bun run dashboard` builds it first when
 `web/out` is missing or older than any file in `web/` (it installs `web/`'s dependencies on the
-first build); when it is up to date this is a few file checks. `bun run dashboard --no-build`
+first build); when it is up to date this is a few file checks. One build runs at a time: a second
+start waits for it (`web/.dashboard-build.lock`), and a file saved during a build makes the next
+start rebuild. `bun run dashboard --no-build`
 skips the check. Without a built export, pages answer with how to build it
 (`bun run web:build`); the API still works.
 
@@ -59,10 +65,16 @@ skips the check. Without a built export, pages answer with how to build it
   Pace line and the change vs the last Cycle at the same point. Click a tile to chart it.
 - **Cycle chart**: the picked plan's running Cycle, used so far, the Pace line to the Reset, and
   time without readings hatched (never drawn as zero). Chart or table view.
+- **Last week**: one quiet row with the Cycles that reset in the past 7 days (final Waste vs the
+  4 weeks before), Limit Hits and Overage: the same numbers as the Report's "✅ Last week".
 
 ### Analytics (`/analytics`)
 
-![Analytics (sample data)](images/dashboard-analytics.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/dashboard-analytics.png">
+  <source media="(prefers-color-scheme: light)" srcset="images/dashboard-analytics-light.png">
+  <img alt="Analytics (sample data)" src="images/dashboard-analytics.png">
+</picture>
 
 One range toggle (7d / 30d) above every section. Provider tabs pick a plan in each section.
 

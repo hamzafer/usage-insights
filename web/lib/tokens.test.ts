@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { compactTokens, dayLabel, foldModels, fullTokens, longDayLabel, tokenRows, visibleSeries } from "./tokens";
+import { dayLabel, foldModels, fullTokens, longDayLabel, tokenRows, visibleSeries } from "./tokens";
 import type { TokensDaily } from "./types";
 
 // Pure logic of the tokens-by-model chart, run by the root `bun test`. Synthetic values only.
@@ -66,15 +66,6 @@ describe("tokenRows", () => {
 });
 
 describe("number and day formats", () => {
-  test("compact axis numbers", () => {
-    expect(compactTokens(0)).toBe("0");
-    expect(compactTokens(950)).toBe("950");
-    expect(compactTokens(120_400)).toBe("120K");
-    expect(compactTokens(9_512_000)).toBe("9.5M");
-    expect(compactTokens(2_000_000)).toBe("2M");
-    expect(compactTokens(1_250_000_000)).toBe("1.3B");
-  });
-
   test("full numbers with separators", () => {
     expect(fullTokens(122_771_287)).toBe("122,771,287");
   });

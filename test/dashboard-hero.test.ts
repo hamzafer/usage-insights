@@ -27,7 +27,7 @@ function seed(extra: ReturnType<typeof reading>[] = []) {
 }
 
 async function get(path: string) {
-  const handler = dashboardHandler({ load: () => loadDashboardData(dbPath), now: () => new Date(NOW) });
+  const handler = dashboardHandler({ load: (needs) => loadDashboardData(dbPath, needs), now: () => new Date(NOW) });
   const res = await handler(new Request(`http://127.0.0.1:6740${path}`));
   return { status: res.status, body: (await res.json()) as HeroCycle & { error?: string } };
 }

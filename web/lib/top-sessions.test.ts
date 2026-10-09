@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { compactTokens, limitText, sessionDuration, sessionStart } from "./top-sessions";
+import { limitText, sessionDuration, sessionStart } from "./top-sessions";
 
 // Top sessions table formatting (ticket #21). Synthetic values only.
 
@@ -11,13 +11,6 @@ test("limit shares: Measured plain, Estimated with ~, unknown as a dash", () => 
   expect(limitText(0, "measured")).toBe("0%");
   expect(limitText(null, "measured")).toBe("—");
   expect(limitText(null, null)).toBe("—");
-});
-
-test("tokens in compact form", () => {
-  expect(compactTokens(950)).toBe("950");
-  expect(compactTokens(12_300)).toBe("12.3K");
-  expect(compactTokens(30_817_200)).toBe("30.8M");
-  expect(compactTokens(2_400_000_000)).toBe("2.4B");
 });
 
 test("when a session started, in 24-hour time", () => {

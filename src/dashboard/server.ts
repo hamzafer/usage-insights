@@ -10,9 +10,18 @@ import {
 import { buildHero } from "./hero.ts";
 import { buildCycleHistory } from "./history.ts";
 import { hasExport, serveStatic, staticNotFound } from "./static.ts";
-import { buildProjectsRange, isProjectsRange } from "./projects-range.ts";
-import { buildTokensDaily, isTokenRange } from "./tokens-daily.ts";
-import { buildHealth, buildHistory, buildOverview, buildProjects, type DashboardData } from "./view-model.ts";
+import { buildReport } from "../report/build.ts";
+import { buildLastWeek } from "./last-week.ts";
+import { buildProjectsRange, isProjectsRange, projectsRangeFrom } from "./projects-range.ts";
+import { buildTokensDaily, isTokenRange, tokensDailyFrom } from "./tokens-daily.ts";
+import {
+  buildHealth,
+  buildHistory,
+  buildOverview,
+  buildProjects,
+  type DashboardData,
+  type DataNeeds,
+} from "./view-model.ts";
 
 /**
  * The dashboard's request handler: the app's static export (`web/out`, ADR 0003) plus the JSON API.
@@ -21,7 +30,8 @@ import { buildHealth, buildHistory, buildOverview, buildProjects, type Dashboard
  * data source and the listener, not the pages.
  */
 export interface DashboardDeps {
-  load: () => DashboardData;
+  /** Reads the data one request needs (`needs` says which token rows; see DataNeeds). */
+  load: (needs: DataNeeds) => DashboardData;
   now?: () => Date;
   /** IANA time zone for day buckets; the machine's local zone when omitted. */
   timeZone?: string;
@@ -72,7 +82,7 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
 
     let data: DashboardData;
     try {
-      data = deps.load();
+      data = deps.load(needsOf(path, url.searchParams, at));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       log(`dashboard: could not read the data: ${message}`);
@@ -81,6 +91,7 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
 
     if (path === "/api/overview") return json({ now: at.toISOString(), providers: buildOverview(data, at) });
     if (path === "/api/health") return json(buildHealth(data, at));
+    if (path === "/api/last-week") return json(lastWeek(data, at));
     const historyOf = /^\/api\/history\/([^/]+)$/.exec(path)?.[1];
     if (historyOf !== undefined) {
       const id = decodePathPart(historyOf);
@@ -114,6 +125,28 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
     }
     return json({ error: "Not found" }, 404);
   };
+}
+
+/**
+ * Which token rows a request needs. Overview, hero and Provider history use none; the Claude
+ * calibration (health, history, Last week, top sessions) uses all; ranges only their own days.
+ */
+function needsOf(path: string, params: URLSearchParams, at: Date): DataNeeds {
+  if (path === "/api/sessions/top") return { tokens: "all", sessionTokens: true };
+  if (path === "/api/tokens/daily") return { tokens: { from: tokensDailyFrom(at) } };
+  if (path === "/api/projects") {
+    const range = params.get("range");
+    if (range === null) return { tokens: "all" };
+    return isProjectsRange(range) ? { tokens: { from: projectsRangeFrom(at, range) } } : { tokens: "none" };
+  }
+  if (path === "/api/health" || path === "/api/last-week" || path.startsWith("/api/history/")) return { tokens: "all" };
+  return { tokens: "none" };
+}
+
+/** `GET /api/last-week`: the Report's week numbers (src/report/build.ts) for the Overview's quiet row. */
+function lastWeek(data: DashboardData, at: Date) {
+  const report = buildReport({ readings: data.readings, gaps: data.gaps, tokens: data.tokens ?? [], now: at.toISOString() });
+  return buildLastWeek(report);
 }
 
 /** Without a built export there are no pages: say how to get them (never fall back to old HTML). */

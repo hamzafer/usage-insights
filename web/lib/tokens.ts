@@ -1,3 +1,4 @@
+import { dateParts } from "./dates";
 import type { TokensDaily } from "./types";
 
 /**
@@ -82,38 +83,18 @@ export function visibleSeries(series: readonly ModelSeries[], rows: readonly Tok
   return series.filter((s) => rows.some((r) => ((r[s.key] as number | undefined) ?? 0) > 0));
 }
 
-/** 9_512_000 → "9.5M", 120_400 → "120K", 0 → "0". For axes. */
-export function compactTokens(n: number): string {
-  const units: [number, string][] = [
-    [1e9, "B"],
-    [1e6, "M"],
-    [1e3, "K"],
-  ];
-  for (const [size, unit] of units) {
-    if (Math.abs(n) >= size) {
-      const v = n / size;
-      return `${v >= 100 ? Math.round(v) : Number(v.toFixed(1))}${unit}`;
-    }
-  }
-  return String(Math.round(n));
-}
-
 /** 122771287 → "122,771,287". */
 export function fullTokens(n: number): string {
   return Math.round(n).toLocaleString("en-US");
 }
 
-// Fixed names, not Intl: ICU versions disagree ("Sep" vs "Sept"), as in src/dates.ts.
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
 /** "2026-10-05" → "5 Oct" (a calendar day, so no time zone shift). */
 export function dayLabel(date: string): string {
-  const d = new Date(`${date}T00:00:00Z`);
-  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+  const p = dateParts(`${date}T00:00:00Z`, "UTC");
+  return `${p.day} ${p.monthName}`;
 }
 
 /** "2026-10-05" → "Mon 5 Oct". */
 export function longDayLabel(date: string): string {
-  return `${WEEKDAYS[new Date(`${date}T00:00:00Z`).getUTCDay()]} ${dayLabel(date)}`;
+  return `${dateParts(`${date}T00:00:00Z`, "UTC").weekday} ${dayLabel(date)}`;
 }

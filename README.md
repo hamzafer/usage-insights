@@ -4,7 +4,11 @@
 Codex, Cursor and Copilot allowances every 5 minutes and tells you where you're wasting them,
 where you hit limits, and what to change.
 
-![Dashboard Overview, dark (sample data)](docs/images/dashboard.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/dashboard.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/dashboard-light.png">
+  <img alt="Dashboard Overview (sample data)" src="docs/images/dashboard.png">
+</picture>
 
 ## What you get
 
@@ -20,11 +24,15 @@ Code logs.
 
 `bun run dashboard` opens a local dashboard at `http://127.0.0.1:6740`, dark or light:
 
-- **Overview**: a tile per plan (used so far, Pace, status) and the running Cycle's chart
+- **Overview**: a tile per plan (used so far, Pace, status), the running Cycle's chart and a Last week row
 - **Analytics**: projects and models, tokens per model, Waste and Limit history, top sessions
 - **Data health**: the header pill (Recording, gaps, failed runs) opens the details
 
-![Dashboard Analytics, dark (sample data)](docs/images/dashboard-analytics.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/dashboard-analytics.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/dashboard-analytics-light.png">
+  <img alt="Dashboard Analytics (sample data)" src="docs/images/dashboard-analytics.png">
+</picture>
 
 Working on the app itself: `bun run dashboard` for the API, plus `bun run web:dev` for hot reload.
 

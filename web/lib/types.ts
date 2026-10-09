@@ -247,3 +247,21 @@ export interface DataHealth {
   snapshotGaps: { provider: string; from: string; to: string }[];
   calibration: Calibration[];
 }
+
+/** `GET /api/last-week` (buildLastWeek in src/dashboard/last-week.ts): the Report's week numbers. */
+export interface LastWeek {
+  from: string;
+  to: string;
+  cycles: {
+    provider: string;
+    label: string;
+    resets: number;
+    /** Null when none of the Cycles has a measurable Waste. */
+    basis: Basis | null;
+    waste: number | null;
+    /** Average over Cycles that reset in the 4 weeks before; null when none did. */
+    previous: number | null;
+  }[];
+  limitHits: { count: number; previousAvg: number | null; blockedMs: number };
+  overage: { unit: string; spent: number }[];
+}
