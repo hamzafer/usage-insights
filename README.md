@@ -4,7 +4,11 @@
 Codex, Cursor and Copilot allowances every 5 minutes and tells you where you're wasting them,
 where you hit limits, and what to change.
 
-![Dashboard overview (sample data)](docs/images/dashboard.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/dashboard.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/dashboard-light.png">
+  <img alt="Dashboard Overview (sample data)" src="docs/images/dashboard.png">
+</picture>
 
 ## What you get
 
@@ -15,6 +19,22 @@ where you hit limits, and what to change.
 
 It also splits token use per project and model, and rebuilds past history from Codex and Claude
 Code logs.
+
+## Dashboard
+
+`bun run dashboard` opens a local dashboard at `http://127.0.0.1:6740`, dark or light:
+
+- **Overview**: a tile per plan (used so far, Pace, status), the running Cycle's chart and a Last week row
+- **Analytics**: projects and models, tokens per model, Waste and Limit history, top sessions
+- **Data health**: the header pill (Recording, gaps, failed runs) opens the details
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/dashboard-analytics.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/dashboard-analytics-light.png">
+  <img alt="Dashboard Analytics (sample data)" src="docs/images/dashboard-analytics.png">
+</picture>
+
+Working on the app itself: `bun run dashboard` for the API, plus `bun run web:dev` for hot reload.
 
 ## Quick start
 
@@ -31,7 +51,7 @@ bun run dashboard                           # open http://127.0.0.1:6740
 
 | Command | Does |
 |---|---|
-| `bun run dashboard` | Local dashboard: overview, history, projects, data health |
+| `bun run dashboard` | Local dashboard (builds the `web/` app when stale): Overview, Analytics, data health |
 | `bun run summary` | Waste, Limit Hits, Overage and Pace in the terminal |
 | `bun run status` | Latest reading per provider |
 | `bun run report --dry-run` | Preview the weekly card without sending |
@@ -50,7 +70,7 @@ never copied anywhere.
 
 ## Learn more
 
-- [Usage guide](docs/usage.md): settings, launchd details, the report card, Suggestions
+- [Usage guide](docs/usage.md): settings, the dashboard, launchd details, the report card, Suggestions
 - [Glossary](GLOSSARY.md): what Waste, Cycle, Pace and friends mean
 - [Decisions](docs/adr/): why it's built this way
 

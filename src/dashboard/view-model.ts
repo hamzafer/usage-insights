@@ -2,11 +2,12 @@ import { type Calibration, claudeCalibration, type EstimatedWaste } from "../cal
 import { limitsOverageAndPace } from "../limits-summary.ts";
 import type { CycleOverage } from "../overage.ts";
 import type { Pace } from "../pace.ts";
+import { paceStatus, type Status } from "../pace-status.ts";
 import { idleCapacity, READING_GAP_TOLERANCE_MS } from "../sessions.ts";
-import type { Gap, RunOutcome, StoredReading, TokenEvent } from "../store.ts";
-import { LIVE_SOURCE } from "../providers.ts";
+import type { Gap, RunOutcome, SessionTokenEvent, StoredReading, TokenEvent } from "../store.ts";
+import { basisOfSource, LIVE_SOURCE } from "../providers.ts";
 import { type CycleTokens, tokensByCycle } from "../token-shares.ts";
-import { deriveWindows, type Reading, type Waste, type Window } from "../window-model.ts";
+import { type Basis, deriveWindows, type Reading, type Waste, type Window } from "../window-model.ts";
 
 /**
  * Dashboard view models (spec §5): pure functions turning stored data into page data.
@@ -25,6 +26,21 @@ export interface DashboardData {
   tokens?: TokenEvent[];
   /** The newest Backfill and Report run outcomes, newest first; none when omitted. */
   runs?: RunOutcome[];
+  /** Token events with their session (top sessions), oldest first; none when omitted. */
+  sessionTokens?: SessionTokenEvent[];
+  /** Every Provider with token events, when `tokens` holds only a range of them; else from `tokens`. */
+  tokenProviders?: string[];
+}
+
+/**
+ * Which token rows one request needs, so a page view loads only those (token rows are the biggest
+ * table). Readings, gaps and runs are always loaded.
+ */
+export interface DataNeeds {
+  /** "none"; "all" (the Claude calibration uses every row); or only rows at or after `from`. */
+  tokens: "none" | "all" | { from: string };
+  /** Token rows with their session (top sessions); they then also serve as `tokens`. */
+  sessionTokens?: boolean;
 }
 
 export interface CycleResult {
@@ -42,6 +58,13 @@ export interface RunningCycle {
   /** How far through the Cycle `now` is, 0..1; null while its start (the previous Reset) is unknown. */
   elapsedShare: number | null;
   pace: Pace;
+  /** The status dot from Pace: the same rule as the Telegram card (src/pace-status.ts). */
+  status: Status;
+  /**
+   * The previous Cycle on this line at the same point (time since its start) as the newest reading,
+   * for a delta vs the last Cycle; null when the previous Cycle or either start is unknown.
+   */
+  lastCycleAtSamePoint: { usedShare: number; basis: Basis } | null;
 }
 
 export interface LimitHitsSummary {
@@ -148,12 +171,15 @@ export function buildOverview(data: DashboardData, now: string | Date): Provider
         const last = w.readings.at(-1)!;
         const start = ended.findLast((c) => c.label === w.label)?.endedAt;
         const length = start && w.resetsAt ? toMs(w.resetsAt) - toMs(start) : 0;
+        const cyclePace = pace.find((p) => p.provider === provider && p.label === w.label)!;
         return {
           label: w.label,
           resetsAt: w.resetsAt,
           usedShare: last.limit > 0 ? last.used / last.limit : 0,
           elapsedShare: length > 0 ? Math.min(1, Math.max(0, (nowMs - toMs(start!)) / length)) : null,
-          pace: pace.find((p) => p.provider === provider && p.label === w.label)!,
+          pace: cyclePace,
+          status: paceStatus(cyclePace).status,
+          lastCycleAtSamePoint: atSamePointLastCycle(cycles, w),
         };
       });
     const hits = limitHits.filter((h) => h.provider === provider && nowMs - toMs(h.hitAt) <= LIMIT_HIT_LOOKBACK_MS);
@@ -241,6 +267,42 @@ export function buildProjects(data: DashboardData, now: string | Date): Projects
       cycles: own.slice(-RECENT_TOKEN_CYCLES).toReversed(),
     })),
   };
+}
+
+/**
+ * The previous Cycle's used share at the same time since its start as `current`'s newest reading,
+ * interpolated between its two readings around that time. A Cycle's start is the previous Window's
+ * end on its line, else its Reset minus the reported length; the previous Cycle's start may also
+ * come from the current Cycle's length (Cycles of one line are equally long). Null when unknown.
+ */
+function atSamePointLastCycle(cycles: readonly Window[], current: Window): { usedShare: number; basis: Basis } | null {
+  const line = cycles.filter((w) => w.label === current.label);
+  const i = line.indexOf(current);
+  const previous = line[i - 1];
+  if (!previous?.endedAt) return null;
+  const start = toMs(previous.endedAt);
+  const currentLength = current.resetsAt ? toMs(current.resetsAt) - start : null;
+  const previousStart = startOf(previous, line[i - 2]) ?? (currentLength ? start - currentLength : null);
+  if (previousStart === null) return null;
+
+  const last = current.readings.at(-1)!;
+  const target = previousStart + (toMs(last.fetchedAt) - start);
+  const readings = previous.readings.filter((r) => r.limit > 0);
+  const after = readings.findIndex((r) => toMs(r.fetchedAt) >= target);
+  if (after < 0) return null;
+  const b = readings[after]!;
+  const shareOf = (r: Reading) => r.used / r.limit;
+  if (after === 0) return toMs(b.fetchedAt) === target ? { usedShare: shareOf(b), basis: basisOfSource(b.source) } : null;
+  const a = readings[after - 1]!;
+  const t = (target - toMs(a.fetchedAt)) / (toMs(b.fetchedAt) - toMs(a.fetchedAt));
+  return { usedShare: shareOf(a) + t * (shareOf(b) - shareOf(a)), basis: basisOfSource(b.source) };
+}
+
+/** A Window's start: the previous Window's end on its line, else its Reset minus its reported length. */
+function startOf(w: Window, previous: Window | undefined): number | null {
+  if (previous?.endedAt) return toMs(previous.endedAt);
+  const periodMs = w.readings.findLast((r) => r.periodMs)?.periodMs;
+  return periodMs && w.resetsAt ? toMs(w.resetsAt) - periodMs : null;
 }
 
 /** Windows of the lines the Window Model analyses: Sessions and Cycles. */

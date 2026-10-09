@@ -7,6 +7,10 @@ import { clip, duration, escapeHtml as e, percent } from "./format.ts";
 import { MAX_SUGGESTION_CHARS, type Suggestions } from "./suggestions.ts";
 import { fitTelegram, TELEGRAM_TEXT_LIMIT } from "./telegram.ts";
 import { dateParts } from "../dates.ts";
+import { paceStatus, type Status } from "../pace-status.ts";
+
+// The status rule is shared with the dashboard (src/pace-status.ts).
+export { BLOCKED_GREEN, BLOCKED_RED, paceStatus, type Status, WASTE_GREEN, WASTE_RED } from "../pace-status.ts";
 
 /**
  * The Report as a compact Telegram card (Bot API `parse_mode: "HTML"`): readable in 5 seconds,
@@ -36,45 +40,8 @@ const MAX_NOTES = 3;
 /** While recording is younger than this, the card says "Week N of recording" instead of listing unknown time. */
 const YOUNG_RECORDING_MS = 4 * WEEK_MS;
 
-export type Status = "red" | "yellow" | "green" | "unknown";
-
 const DOTS: Record<Status, string> = { red: "🔴", yellow: "🟡", green: "🟢", unknown: "⚪" };
 const RANK: Record<Status, number> = { red: 0, yellow: 1, green: 2, unknown: 3 };
-
-/** Waste ahead below this is green, above `WASTE_RED` red, in between yellow. */
-export const WASTE_GREEN = 0.3;
-export const WASTE_RED = 0.7;
-/**
- * A projected Limit Hit is judged by the time it would leave the user blocked (Reset minus the hit)
- * as a share of the Cycle: maxing out in the last 10% of the Cycle uses the allowance fully (green),
- * up to 30% is a warning (yellow), more is red.
- */
-export const BLOCKED_GREEN = 0.1;
-export const BLOCKED_RED = 0.3;
-
-/**
- * Status dot of a running Cycle (README: "Status dots"):
- * - no rate yet: ⚪ (unknown);
- * - a Limit Hit projected before the Reset: by the share of the Cycle left blocked
- *   (≤ 10% 🟢, ≤ 30% 🟡, more 🔴); a near Limit Hit is a warning, a late one is fine;
- * - otherwise by the Waste it is heading for: < 30% 🟢, 30–70% 🟡, > 70% 🔴.
- */
-/** `score` orders rows of the same status, worst first. */
-export function paceStatus(p: Pace): { status: Status; score: number } {
-  if (p.projectedLimitHitAt && p.resetsAt) {
-    const blocked = blockedShare(p);
-    // Within a color, a projected Limit Hit sorts before Waste.
-    return { status: blocked <= BLOCKED_GREEN ? "green" : blocked <= BLOCKED_RED ? "yellow" : "red", score: 1 + blocked };
-  }
-  if (p.expectedWaste === null) return { status: "unknown", score: 0 };
-  const w = p.expectedWaste;
-  return { status: w < WASTE_GREEN ? "green" : w <= WASTE_RED ? "yellow" : "red", score: w };
-}
-
-function blockedShare(p: Pace): number {
-  const length = p.periodMs ?? WEEK_MS;
-  return Math.max(0, Date.parse(p.resetsAt!) - Date.parse(p.projectedLimitHitAt!)) / length;
-}
 
 export function renderTelegram(report: Report, options: CardOptions = {}): string {
   const full = card(report, options, true);

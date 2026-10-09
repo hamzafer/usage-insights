@@ -115,9 +115,11 @@ function claudeEvent(line: string, provider: string, resolver: ProjectResolver):
   };
   if (event.input + event.cacheWrite + event.cacheRead + event.output === 0) return [];
   const requestId = typeof entry.requestId === "string" ? entry.requestId : "";
+  const session = [entry.sessionId, entry.session_id].find((s) => typeof s === "string" && s) ?? null;
   return [
     {
       key: `claude:${message.id}:${requestId}`,
+      session,
       provider,
       at: new Date(entry.timestamp).toISOString(),
       project: resolver.resolve(typeof entry.cwd === "string" ? entry.cwd : ""),
@@ -147,12 +149,14 @@ function codexEvents(
   read: NewLines,
   resolver: ProjectResolver,
 ): { events: KeyedTokenEvent[]; context: string } {
-  const context: CodexContext = { model: UNKNOWN_MODEL, cwd: "", repo: null };
+  const context: CodexContext = { model: UNKNOWN_MODEL, cwd: "", repo: null, session: sessionOfFile(file) };
   const track = (entry: any) => {
     const p = entry?.payload;
     if (entry?.type === "session_meta") {
       if (typeof p?.cwd === "string") context.cwd = p.cwd;
       context.repo = repoName(p?.git?.repository_url);
+      const id = [p?.id, p?.session_id].find((s) => typeof s === "string" && s);
+      if (id) context.session = id;
     }
     if (entry?.type === "turn_context") {
       if (typeof p?.cwd === "string") context.cwd = p.cwd;
@@ -189,6 +193,7 @@ function codexEvents(
     const total = info.total_token_usage?.total_tokens;
     events.push({
       key: `codex:${file}:${typeof total === "number" ? total : entry.timestamp}`,
+      session: context.session,
       provider: CODEX_PROVIDER,
       at: new Date(entry.timestamp).toISOString(),
       project: resolver.resolve(context.cwd) ?? context.repo,
@@ -202,15 +207,28 @@ function codexEvents(
   return { events, context: JSON.stringify(context) };
 }
 
-/** The model, cwd and repository of the latest turn: what a Codex call is attributed to. */
+/** The model, cwd and repository of the latest turn, and the session: what a Codex call is attributed to. */
 interface CodexContext {
   model: string;
   cwd: string;
   repo: string | null;
+  /** The `session_meta` id; until one is read, the id in the file name; null without either. */
+  session: string | null;
 }
 
+/** State saved before sessions were kept (no `session` key) is not used: the earlier lines are read again. */
 function savedContext(json: string | null): CodexContext | null {
   const value = json === null ? null : parse(json);
-  if (!value || typeof value.model !== "string" || typeof value.cwd !== "string") return null;
-  return { model: value.model, cwd: value.cwd, repo: typeof value.repo === "string" ? value.repo : null };
+  if (!value || typeof value.model !== "string" || typeof value.cwd !== "string" || !("session" in value)) return null;
+  return {
+    model: value.model,
+    cwd: value.cwd,
+    repo: typeof value.repo === "string" ? value.repo : null,
+    session: typeof value.session === "string" ? value.session : null,
+  };
+}
+
+/** `rollout-2026-10-08T12-00-00-<uuid>.jsonl` -> `<uuid>`; null when the name holds none. */
+function sessionOfFile(file: string): string | null {
+  return /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i.exec(file)?.[1] ?? null;
 }
