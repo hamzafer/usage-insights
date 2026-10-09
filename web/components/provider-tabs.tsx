@@ -29,7 +29,7 @@ export function ProviderTabs({
 }) {
   return (
     <Tabs value={value} onValueChange={onChange} className={className}>
-      <TabsList aria-label="Provider" className="h-8 max-w-full justify-start overflow-x-auto">
+      <TabsList aria-label="Provider" className="h-8 max-w-full justify-start overflow-x-auto [scrollbar-width:none]">
         {all ? (
           <TabsTrigger value={ALL_PROVIDERS} className="flex-none px-2.5 text-[13px]">
             All

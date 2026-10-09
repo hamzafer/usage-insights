@@ -68,7 +68,7 @@ export function ProjectsModels({ range }: AnalyticsSectionProps) {
         )
       }
     >
-      <div className="grid flex-1 gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2">
         <RankedCard key={`projects-${current.provider}`} title="Projects" noun="Projects" ranking={current} rows={current.projects} />
         <RankedCard key={`models-${current.provider}`} title="Models" noun="models" ranking={current} rows={current.models} />
       </div>
@@ -87,7 +87,7 @@ function Frame({
   children: React.ReactNode;
 }) {
   return (
-    <section aria-labelledby="projects-models-title" className="flex h-full min-w-0 flex-col gap-3">
+    <section aria-labelledby="projects-models-title" className="flex min-w-0 flex-col gap-3">
       <div className="flex min-h-9 flex-wrap items-center gap-x-4 gap-y-2">
         <div className="min-w-0 flex-[1_1_12rem]">
           <h2 id="projects-models-title" className="text-sm font-medium">

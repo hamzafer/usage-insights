@@ -157,7 +157,7 @@ describe("GET /api/sessions/top", () => {
     store.saveTokenEvents([
       keyed(call("codex", "c1", "2026-10-08T10:00:00.000Z", 400, { model: "gpt-x" }), "k1"),
       keyed(call("codex", "c1", "2026-10-08T11:00:00.000Z", 400, { model: "gpt-x" }), "k2"),
-      keyed(call("claude", "s1", "2026-10-02T10:00:00.000Z", 300), "k3"),
+      keyed(call("claude", "s1", "2026-10-02T10:00:00.000Z", 300, { model: "claude-opus-5-5" }), "k3"),
       keyed(call("claude", "s2", "2026-09-20T10:00:00.000Z", 900), "k4"),
     ]);
     store.saveReadings(
@@ -188,6 +188,8 @@ describe("GET /api/sessions/top", () => {
     expect(codex.sessionShare).toBeCloseTo(0.12);
     expect(codex.weeklyShare).toBeCloseTo(0.03);
     expect(claude).toMatchObject({ provider: "claude", tokens: 300, sessionShare: null, weeklyShare: null, basis: null });
+    // The display name, as Tokens by model shows it (the id goes in the tooltip).
+    expect(claude).toMatchObject({ model: "claude-opus-5-5", modelName: "Opus 5.5" });
     // Never the full path of a Project.
     expect(JSON.stringify(body)).not.toContain("/code/");
   });

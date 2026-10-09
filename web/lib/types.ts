@@ -76,6 +76,8 @@ export interface TopSession {
   /** The main Project's folder name; "(other)" when none. */
   project: string;
   model: string;
+  /** The model's display name, as in Tokens by model. */
+  modelName: string;
   startedAt: string;
   endedAt: string;
   calls: number;

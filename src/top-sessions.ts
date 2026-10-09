@@ -1,4 +1,5 @@
 import type { Calibration } from "./calibration.ts";
+import { modelName } from "./names.ts";
 import { projectName } from "./projects.ts";
 import { isCalibrated } from "./providers.ts";
 import type { SessionTokenEvent } from "./store.ts";
@@ -29,6 +30,8 @@ export interface TopSession {
   project: string;
   /** The model with the most tokens. */
   model: string;
+  /** Its display name ("Opus 5.5"), as in Tokens by model. */
+  modelName: string;
   /** The first and last call in the range. */
   startedAt: string;
   endedAt: string;
@@ -82,6 +85,7 @@ export function topSessions({
       id: first.session!,
       project: projectName(biggest(calls, (e) => e.project)),
       model: biggest(calls, (e) => e.model) ?? "unknown",
+      modelName: "",
       startedAt: times[0]!,
       endedAt: times.at(-1)!,
       calls: calls.length,
@@ -90,6 +94,7 @@ export function topSessions({
       weeklyShare: null,
       basis: null,
     };
+    row.modelName = modelName(row.model);
     if (first.provider === "codex") {
       row.sessionShare = codexMovement(codexLines.get("Session"), times);
       row.weeklyShare = codexMovement(codexLines.get("Weekly"), times);

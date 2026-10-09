@@ -116,8 +116,8 @@ function SessionRow({ session: s }: { session: TopSession }) {
           {providerName(s.provider)}
         </span>
       </TableCell>
-      <TableCell className="max-w-44 truncate font-mono text-xs text-muted-foreground" title={s.model}>
-        {s.model}
+      <TableCell className="max-w-44 truncate text-muted-foreground" title={s.model}>
+        {s.modelName}
       </TableCell>
       <TableCell className="text-right font-mono tabular-nums" title={`${s.tokens.toLocaleString("en-US")} tokens in ${s.calls} calls`}>
         {compactTokens(s.tokens)}
