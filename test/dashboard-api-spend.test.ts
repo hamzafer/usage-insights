@@ -40,6 +40,7 @@ describe("buildApiSpend", () => {
     expect(personal.last30d.calls).toBe(7);
     expect(personal.last30d.costUsd).toBeCloseTo(0.56);
     expect(personal.callers.map((c) => `${c.caller}/${c.model}`)).toEqual(["suggestions/claude-opus-4-5", "bouncer/claude-haiku-4-5"]);
+    expect(personal.callers.map((c) => c.modelName)).toEqual(["Opus 4.5", "Haiku 4.5"]);
     expect(personal.callers[1]!.last7d.costUsd).toBeCloseTo(0.04);
     expect(personal.callers[1]!.last30d.costUsd).toBeCloseTo(0.06);
     expect(personal.daily.at(-1)!.costUsd).toBeCloseTo(0.53);

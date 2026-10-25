@@ -1,3 +1,4 @@
+import { modelName } from "../names.ts";
 import type { ApiSpendRow } from "../store.ts";
 
 /**
@@ -26,6 +27,8 @@ export interface Spend {
 export interface CallerSpend {
   caller: string;
   model: string;
+  /** Display name ("Haiku 4.5"); the raw id when unknown. */
+  modelName: string;
   last7d: Spend;
   last30d: Spend;
 }
@@ -63,6 +66,7 @@ export function buildApiSpend(rows: readonly ApiSpendRow[], now: string | Date, 
         .map((group) => ({
           caller: group[0]!.caller,
           model: group[0]!.model,
+          modelName: modelName(group[0]!.model),
           last7d: sum(group.filter((r) => inWeek.has(r.day))),
           last30d: sum(group),
         }))
