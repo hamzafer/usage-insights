@@ -100,3 +100,47 @@ test("setup:draft writes the DRAFT template once and never overwrites", () => {
   expect(second.stdout.toString()).toContain("already exists");
   expect(readFileSync(join(dataDir, "setup.md"), "utf8")).toBe("# Mine\n");
 });
+
+test("Suggestions calls are recorded as API Spend (key env, caller suggestions); a dry run records nothing", async () => {
+  const server = Bun.serve({
+    port: 0,
+    fetch: () =>
+      Response.json({
+        model: "claude-sonnet-5-5",
+        stop_reason: "end_turn",
+        usage: { input_tokens: 1000, output_tokens: 100 },
+        content: [{ type: "text", text: '{"suggestions": []}' }],
+      }),
+  });
+  try {
+    const env = {
+      ...process.env,
+      USAGE_INSIGHTS_DATA_DIR: dataDir,
+      USAGE_INSIGHTS_CODEX_DIR: join(dataDir, "no-codex"),
+      USAGE_INSIGHTS_CLAUDE_DIR: join(dataDir, "no-claude"),
+      USAGE_INSIGHTS_CLAUDE_WORK_DIR: join(dataDir, "no-claude-work"),
+      TELEGRAM_STATE_DIR: join(dataDir, "telegram"),
+      ANTHROPIC_API_KEY: "test-key",
+      USAGE_INSIGHTS_ANTHROPIC_URL: `http://127.0.0.1:${server.port}/v1/messages`,
+    };
+    const go = async (...args: string[]) => {
+      const proc = Bun.spawn(["bun", "run", "src/cli/report.ts", ...args], { cwd: root, env, stdout: "pipe", stderr: "pipe" });
+      await proc.exited;
+      return (await new Response(proc.stdout).text()) + (await new Response(proc.stderr).text());
+    };
+    await go("--dry-run");
+    let store = openStore(join(dataDir, "usage.db"));
+    expect(store.apiSpend()).toEqual([]);
+    store.close();
+    const out = await go();
+    expect(out).not.toContain("test-key");
+    store = openStore(join(dataDir, "usage.db"));
+    const rows = store.apiSpend();
+    store.close();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ key: "env", caller: "suggestions", model: "claude-sonnet-5-5", calls: 1, input: 1000, output: 100 });
+    expect(rows[0]!.costUsd).toBeCloseTo(0.003, 10);
+  } finally {
+    server.stop(true);
+  }
+});
