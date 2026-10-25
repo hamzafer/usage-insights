@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildReport } from "../src/report/build.ts";
+import { apiSpendDays, buildReport } from "../src/report/build.ts";
 import { input } from "./report-fixtures.ts";
 
 const H = 3_600_000;
@@ -108,4 +108,56 @@ test("an empty store builds a Report that says there is no data", () => {
   expect(empty.pace).toEqual([]);
   expect(empty.trend.limitHits.previousWeeks).toBe(0);
   expect(empty.top.total).toBe(0);
+});
+
+const spend = (key: string, caller: string, costUsd: number | null, calls = 1) => ({
+  day: "2026-10-10",
+  key,
+  caller,
+  model: "claude-sonnet-4-5",
+  calls,
+  input: 1,
+  cacheWrite: 0,
+  cacheRead: 0,
+  output: 1,
+  costUsd,
+});
+
+describe("buildReport: API Spend", () => {
+  test("is empty (personal and work without calls) when no rows are given", () => {
+    expect(report.apiSpend).toEqual({
+      costUsd: 0,
+      unknownCost: false,
+      keys: [
+        { key: "personal", calls: 0, costUsd: 0, unknownCost: false, callers: [] },
+        { key: "work", calls: 0, costUsd: 0, unknownCost: false, callers: [] },
+      ],
+    });
+  });
+
+  test("sums per Key and Caller; personal and work come first, other Keys with rows after", () => {
+    const r = buildReport({
+      ...input,
+      apiSpend: [spend("env", "suggestions", 0.5), spend("personal", "suggestions", 0.01), spend("personal", "bouncer", 0.02, 3), spend("personal", "bouncer", 0.01, 2)],
+    });
+    expect(r.apiSpend.keys.map((k) => k.key)).toEqual(["personal", "work", "env"]);
+    expect(r.apiSpend.costUsd).toBeCloseTo(0.54);
+    const personal = r.apiSpend.keys[0]!;
+    expect(personal.calls).toBe(6);
+    expect(personal.callers.map((c) => [c.caller, c.calls])).toEqual([["bouncer", 5], ["suggestions", 1]]);
+    expect(personal.callers[0]!.costUsd).toBeCloseTo(0.03);
+  });
+
+  test("an unknown price is flagged, never counted as zero", () => {
+    const r = buildReport({ ...input, apiSpend: [spend("personal", "bouncer", 0.02), spend("personal", "bouncer", null), spend("work", "suggestions", null)] });
+    expect(r.apiSpend.unknownCost).toBe(true);
+    expect(r.apiSpend.keys[0]).toMatchObject({ costUsd: 0.02, unknownCost: true });
+    expect(r.apiSpend.keys[1]).toMatchObject({ costUsd: 0, unknownCost: true });
+  });
+
+  test("the local days are the 7 ending with today in the Report's time zone", () => {
+    expect(apiSpendDays("2026-10-12T09:00:00.000Z", "UTC")).toEqual({ from: "2026-10-06", to: "2026-10-12" });
+    // 23:30 UTC is already the next day in Oslo (UTC+2 in October).
+    expect(apiSpendDays("2026-10-12T23:30:00.000Z", "Europe/Oslo")).toEqual({ from: "2026-10-07", to: "2026-10-13" });
+  });
 });

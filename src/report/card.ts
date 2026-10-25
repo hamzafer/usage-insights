@@ -3,7 +3,7 @@ import type { Pace } from "../pace.ts";
 import { formatTokens } from "../summary.ts";
 import type { Share } from "../token-shares.ts";
 import { type Report, WEEK_MS, type WeekOverage } from "./build.ts";
-import { clip, duration, escapeHtml as e, percent } from "./format.ts";
+import { apiSpendLine, clip, duration, escapeHtml as e, percent } from "./format.ts";
 import { MAX_SUGGESTION_CHARS, type Suggestions } from "./suggestions.ts";
 import { fitTelegram, TELEGRAM_TEXT_LIMIT } from "./telegram.ts";
 import { dateParts } from "../dates.ts";
@@ -18,7 +18,7 @@ export { BLOCKED_GREEN, BLOCKED_RED, paceStatus, type Status, WASTE_GREEN, WASTE
  *
  *   📊 Usage week · 5–12 Oct
  *   ▶ Running now       one line per running Cycle, a status dot each, worst first
- *   ✅ Last week        Cycles that reset, Limit Hits and Overage
+ *   ✅ Last week        Cycles that reset, Limit Hits, Overage and Claude API Spend
  *   💡 Suggestions      numbered, each at most 120 characters (cut on a word boundary when parsed)
  *   ▸ Details           expandable blockquote: top Projects and models, tokens, coverage
  */
@@ -112,6 +112,7 @@ function lastWeek(report: Report): string[] {
   if (hits.previousAvg !== null) limit += ` (was ${Math.round(hits.previousAvg * 10) / 10}/wk)`;
   if (hits.thisWeek > 0) limit += ` · blocked ${duration(report.trend.blockedMs.thisWeek)}`;
   lines.push(`${limit}   💸 Overage: ${e(overageTotal(report.overage))}`);
+  lines.push(e(apiSpendLine(report.apiSpend)));
   return lines;
 }
 

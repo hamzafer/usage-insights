@@ -218,3 +218,47 @@ test("Overage lines that spent nothing are left out of the total; none spent sho
   const some: Report = { ...zero, overage: [zero.overage[0]!, { ...zero.overage[1]!, spent: 12 }] };
   expect(renderTelegram(some, options)).toContain("💸 Overage: 12 credits\n");
 });
+
+const line = "🔑 Claude API: $0.04 (personal: Bouncer $0.03, Suggestions $0.01; work: no calls)";
+const row = (key: string, caller: string, costUsd: number | null) => ({
+  day: "2026-10-10",
+  key,
+  caller,
+  model: "claude-sonnet-4-5",
+  calls: 1,
+  input: 1,
+  cacheWrite: 0,
+  cacheRead: 0,
+  output: 1,
+  costUsd,
+});
+
+test("API Spend is one line in the Telegram card's Last week section and in the Markdown, not in the numbers", () => {
+  const spent = buildReport({ ...input, apiSpend: [row("personal", "bouncer", 0.03), row("personal", "suggestions", 0.01)] });
+  const card = renderTelegram(spent, options);
+  expect(card).toContain(`\n${line}\n`);
+  // In the Last week section: before the Details block.
+  expect(card.indexOf(line)).toBeLessThan(card.indexOf("▸ Details"));
+  expect(renderMarkdown(spent, options)).toContain(`## Claude API\n\n${line}\n`);
+  expect(renderNumbers(spent, options)).not.toContain("Claude API");
+  expect(renderNumbers(spent, options)).toBe(renderNumbers(report, options));
+});
+
+test("API Spend money: under a cent is <$0.01 (escaped in the card), unknown prices show ? and +?", () => {
+  const tiny = buildReport({ ...input, apiSpend: [row("personal", "bouncer", 0.004)] });
+  expect(renderMarkdown(tiny, options)).toContain("🔑 Claude API: <$0.01 (personal: Bouncer <$0.01; work: no calls)");
+  expect(renderTelegram(tiny, options)).toContain("🔑 Claude API: &lt;$0.01 (personal: Bouncer &lt;$0.01; work: no calls)");
+
+  const unknown = buildReport({
+    ...input,
+    apiSpend: [row("personal", "bouncer", 0.03), row("personal", "bouncer", null), row("work", "suggestions", null), row("env", "x<y", 0)],
+  });
+  expect(renderMarkdown(unknown, options)).toContain(
+    "🔑 Claude API: $0.03+? (personal: Bouncer $0.03+?; work: Suggestions ?; env: X<y $0.00)",
+  );
+  expect(renderTelegram(unknown, options)).toContain("env: X&lt;y $0.00)");
+});
+
+test("without API Spend rows both Keys say no calls", () => {
+  expect(renderMarkdown(report, options)).toContain("🔑 Claude API: $0.00 (personal: no calls; work: no calls)");
+});
