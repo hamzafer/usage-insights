@@ -1,4 +1,5 @@
 import { claudeCalibration } from "../calibration.ts";
+import { lastDays, localDay } from "../dates.ts";
 import { findLimitHits, type LimitHit } from "../limits.ts";
 import { overageUnit } from "../overage.ts";
 import { type Pace, paceOfRunningCycles } from "../pace.ts";
@@ -201,8 +202,7 @@ const API_KEYS = ["personal", "work"];
  * 7 days.
  */
 export function apiSpendDays(now: string, timeZone?: string): { from: string; to: string } {
-  const day = dayFormat(timeZone);
-  return { from: day(iso(ms(now) - 6 * DAY_MS)), to: day(now) };
+  return { from: lastDays(localDay(timeZone)(ms(now)), 7)[0]!, to: dayFormat(timeZone)(now) };
 }
 
 function apiSpendWeek(rows: readonly ApiSpendRow[]): ApiSpendWeek {

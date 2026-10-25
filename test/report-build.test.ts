@@ -160,4 +160,14 @@ describe("buildReport: API Spend", () => {
     // 23:30 UTC is already the next day in Oslo (UTC+2 in October).
     expect(apiSpendDays("2026-10-12T23:30:00.000Z", "Europe/Oslo")).toEqual({ from: "2026-10-07", to: "2026-10-13" });
   });
+
+  test("a daylight saving change does not make it 6 or 8 days", () => {
+    // Just after the fall-back (New York, 2026-11-01): the 25-hour day must not drop a day.
+    expect(apiSpendDays("2026-11-02T04:30:00.000Z", "America/New_York")).toEqual({ from: "2026-10-26", to: "2026-11-01" });
+    // Just after the spring-forward (New York, 2026-03-08): the 23-hour day must not add one.
+    expect(apiSpendDays("2026-03-09T04:30:00.000Z", "America/New_York")).toEqual({ from: "2026-03-03", to: "2026-03-09" });
+    // Oslo falls back on 2026-10-25 and springs forward on 2026-03-29.
+    expect(apiSpendDays("2026-10-25T23:30:00.000Z", "Europe/Oslo")).toEqual({ from: "2026-10-20", to: "2026-10-26" });
+    expect(apiSpendDays("2026-03-29T22:30:00.000Z", "Europe/Oslo")).toEqual({ from: "2026-03-24", to: "2026-03-30" });
+  });
 });

@@ -1,3 +1,4 @@
+import { lastDays, localDay } from "../dates.ts";
 import { modelName } from "../names.ts";
 import type { TokenEvent } from "../store.ts";
 import { tokenTotal } from "../token-shares.ts";
@@ -87,19 +88,4 @@ export function buildTokensDaily(
       .map(([id]) => ({ id, name: modelName(id) })),
     providers: [...providers].toSorted(),
   };
-}
-
-/** `YYYY-MM-DD` of a time in `timeZone` (local when omitted). */
-function localDay(timeZone?: string): (ms: number) => string {
-  const f = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone });
-  return (ms) => {
-    const p = Object.fromEntries(f.formatToParts(ms).map((x) => [x.type, x.value]));
-    return `${p.year}-${p.month}-${p.day}`;
-  };
-}
-
-/** The `count` calendar days ending with `today`, oldest first (calendar math, so DST cannot skip a day). */
-function lastDays(today: string, count: number): string[] {
-  const base = Date.parse(`${today}T00:00:00Z`);
-  return Array.from({ length: count }, (_, i) => new Date(base - (count - 1 - i) * DAY_MS).toISOString().slice(0, 10));
 }
