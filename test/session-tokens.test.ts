@@ -103,8 +103,10 @@ test("upgrading a data file resets the token Backfill's progress, so the next ru
   // A data file from before sessions: the call already stored, its log read to the end.
   write(join(sources.claude[0]!.dir, "-p/s.jsonl"), [assistant("A", "2026-10-08T09:00:00.000Z")]);
   const old = new Database(dbPath);
-  for (const m of MIGRATIONS.slice(0, -1)) old.exec(m);
-  old.exec(`PRAGMA user_version = ${MIGRATIONS.length - 1}`);
+  // The sessions migration is the 6th; later ones (API Spend, ...) are not part of this scenario.
+  const before = MIGRATIONS.slice(0, 5);
+  for (const m of before) old.exec(m);
+  old.exec(`PRAGMA user_version = ${before.length}`);
   old.exec(`INSERT INTO token_events (key, provider, at, project, model, input, cache_write, cache_read, output)
             VALUES ('claude:msg_A:req_A', 'claude', '2026-10-08T09:00:00.000Z', NULL, 'claude-opus-5', 10, 0, 0, 5)`);
   old.exec("INSERT INTO backfill_progress (source, path, offset) VALUES ('tokens:claude', '-p/s.jsonl', 999)");
