@@ -54,11 +54,12 @@ try {
     },
     // Only run after `prepare` succeeded, so the config is there by then.
     backfills: config ? incrementalBackfills(config, db) : [],
-    load: () => ({
+    load: (spendDays) => ({
       readings: db().readingsWithRole(["cycle", "session", "overage"]),
       gaps: db().allGaps(),
       // All of them: the Claude calibration learns from every live Snapshot interval.
       tokens: db().tokenUsage(),
+      apiSpend: db().apiSpend(spendDays),
     }),
     recordRun: (outcome) => db().saveRun(outcome),
     // Token and chat id are read from the Telegram plugin's state at send time, never stored here.

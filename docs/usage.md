@@ -47,6 +47,10 @@ and kept per day, Key, Caller and model in the `api_spend` table:
   `USAGE_INSIGHTS_REASON_BRIDGE_DIR`; the Key is named by `key_service` in its `mode.json` (default
   `anthropic-api-key-personal`, shown as `personal`). A missing file records nothing; a damaged one
   is logged.
+- **Report:** one line in the card's "Last week" and in the Markdown, over the 7 local days ending
+  today: `🔑 Claude API: $0.04 (personal: Bouncer $0.03, Suggestions $0.01; work: no calls)`. Under one
+  cent shows `<$0.01`; a model without a known price shows `?` (`$0.03+?` when part of the total is
+  known). It is not in the numbers the Suggestions are written from.
 
 A model without a known price stores its tokens with no cost. Only calls from these tools are counted.
 
