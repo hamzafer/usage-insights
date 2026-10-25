@@ -150,3 +150,59 @@ test("a migration another process is applying is not applied twice", async () =>
   expect(check.query<{ user_version: number }, []>("PRAGMA user_version").get()?.user_version).toBe(MIGRATIONS.length);
   check.close();
 });
+
+const spend = {
+  day: "2026-10-25",
+  key: "personal",
+  caller: "suggestions",
+  model: "claude-sonnet-5-5",
+  calls: 1,
+  input: 100,
+  cacheWrite: 10,
+  cacheRead: 20,
+  output: 50,
+  costUsd: 0.5,
+};
+
+test("addApiSpend adds to the day's row and keeps rows apart per day, key, caller and model", () => {
+  const store = openStore(join(mkdtempSync(join(tmpdir(), "usage-insights-test-")), "usage.db"));
+  store.addApiSpend({ ...spend, updatedAt: "2026-10-25T10:00:00.000Z" });
+  store.addApiSpend({ ...spend, updatedAt: "2026-10-25T11:00:00.000Z" });
+  store.addApiSpend({ ...spend, key: "work" });
+  store.addApiSpend({ ...spend, day: "2026-10-24" });
+  expect(store.apiSpend()).toHaveLength(3);
+  const row = store.apiSpend().find((r) => r.day === "2026-10-25" && r.key === "personal")!;
+  expect(row).toEqual({ ...spend, calls: 2, input: 200, cacheWrite: 20, cacheRead: 40, output: 100, costUsd: 1, updatedAt: "2026-10-25T11:00:00.000Z" });
+  store.close();
+});
+
+test("addApiSpend keeps the cost NULL once either side is NULL (an unknown price is never read as zero)", () => {
+  const store = openStore(join(mkdtempSync(join(tmpdir(), "usage-insights-test-")), "usage.db"));
+  store.addApiSpend({ ...spend, costUsd: null });
+  store.addApiSpend({ ...spend, costUsd: 0.5 });
+  expect(store.apiSpend()[0]!.costUsd).toBeNull();
+  expect(store.apiSpend()[0]!.calls).toBe(2);
+  store.addApiSpend({ ...spend, model: "other", costUsd: 0.5 });
+  store.addApiSpend({ ...spend, model: "other", costUsd: null });
+  expect(store.apiSpend().find((r) => r.model === "other")!.costUsd).toBeNull();
+  store.close();
+});
+
+test("setApiSpend replaces the day's row", () => {
+  const store = openStore(join(mkdtempSync(join(tmpdir(), "usage-insights-test-")), "usage.db"));
+  store.setApiSpend({ ...spend, caller: "bouncer", calls: 5 });
+  store.setApiSpend({ ...spend, caller: "bouncer", calls: 7, costUsd: null });
+  const rows = store.apiSpend();
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toMatchObject({ caller: "bouncer", calls: 7, costUsd: null });
+  store.close();
+});
+
+test("apiSpend filters by day, inclusive, oldest first", () => {
+  const store = openStore(join(mkdtempSync(join(tmpdir(), "usage-insights-test-")), "usage.db"));
+  for (const day of ["2026-10-23", "2026-10-24", "2026-10-25"]) store.addApiSpend({ ...spend, day });
+  expect(store.apiSpend({ from: "2026-10-24" }).map((r) => r.day)).toEqual(["2026-10-24", "2026-10-25"]);
+  expect(store.apiSpend({ to: "2026-10-24" }).map((r) => r.day)).toEqual(["2026-10-23", "2026-10-24"]);
+  expect(store.apiSpend({ from: "2026-10-24", to: "2026-10-24" })).toHaveLength(1);
+  store.close();
+});

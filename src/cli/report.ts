@@ -7,6 +7,8 @@
 //   --test     prefix the message with "[TEST] "
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { reportKeyName } from "../api-spend/keys.ts";
+import { suggestionsRecorder } from "../api-spend/suggestions.ts";
 import { incrementalBackfills } from "../backfill/jobs.ts";
 import { type Config, loadConfig } from "../config.ts";
 import { AnthropicClient, readApiKey } from "../report/anthropic-client.ts";
@@ -52,11 +54,12 @@ try {
     },
     // Only run after `prepare` succeeded, so the config is there by then.
     backfills: config ? incrementalBackfills(config, db) : [],
-    load: () => ({
+    load: (spendDays) => ({
       readings: db().readingsWithRole(["cycle", "session", "overage"]),
       gaps: db().allGaps(),
       // All of them: the Claude calibration learns from every live Snapshot interval.
       tokens: db().tokenUsage(),
+      apiSpend: db().apiSpend(spendDays),
     }),
     recordRun: (outcome) => db().saveRun(outcome),
     // Token and chat id are read from the Telegram plugin's state at send time, never stored here.
@@ -66,7 +69,13 @@ try {
     suggestions: {
       suggest: (report) =>
         new ClaudeSuggestions({
-          client: new AnthropicClient({ apiKey: () => readApiKey(), model: cfg().suggestionsModel, url: cfg().anthropicUrl }),
+          client: new AnthropicClient({
+            apiKey: () => readApiKey(),
+            model: cfg().suggestionsModel,
+            url: cfg().anthropicUrl,
+            // API Spend (ADR 0004); a dry run's store is read-only, so it records nothing.
+            onUsage: dryRun ? undefined : suggestionsRecorder({ store: db(), key: reportKeyName(), now: () => new Date(), log }),
+          }),
           readSetup: () => {
             if (dryRun) return peekSetup(cfg().dataDir);
             const setup = ensureSetup(cfg().dataDir);

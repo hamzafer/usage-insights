@@ -1,6 +1,6 @@
 import { type Backfill, backfillJob } from "../backfill/jobs.ts";
 import type { RunOutcome } from "../store.ts";
-import { buildReport, type ReportInput } from "./build.ts";
+import { apiSpendDays, buildReport, type ReportInput } from "./build.ts";
 import { escapeHtml } from "./format.ts";
 import { renderMarkdown, renderTelegram } from "./render.ts";
 import { noSuggestions, type Suggestions, type SuggestionsProvider } from "./suggestions.ts";
@@ -25,8 +25,8 @@ export interface ReportDeps {
   prepare?: () => void;
   /** Run first, in order; a failure is logged and noted in the Report, and the run goes on. Skipped on a dry run. */
   backfills: readonly Backfill[];
-  /** Reads the stored data (after the Backfills). */
-  load: () => Omit<ReportInput, "now" | "dataNotes">;
+  /** Reads the stored data (after the Backfills); `spendDays` are the local days API Spend is read for. */
+  load: (spendDays: { from: string; to: string }) => Omit<ReportInput, "now" | "dataNotes">;
   messenger: Messenger;
   /** Writes the Markdown to `file`, a path relative to the data directory. */
   save: (file: string, markdown: string) => void;
@@ -89,7 +89,7 @@ export async function runReport(deps: ReportDeps): Promise<ReportRunResult> {
     }
 
     const now = deps.now();
-    const report = buildReport({ ...deps.load(), now: now.toISOString(), dataNotes: notes });
+    const report = buildReport({ ...deps.load(apiSpendDays(now.toISOString(), deps.timeZone)), now: now.toISOString(), dataNotes: notes });
     const suggestions = await suggest(deps.suggestions ?? noSuggestions, report);
     const reportFile = `reports/${localDate(now, deps.timeZone)}.md`;
     const options = { timeZone: deps.timeZone, dashboardUrl: deps.dashboardUrl, suggestions, reportFile };

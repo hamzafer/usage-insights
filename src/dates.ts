@@ -32,3 +32,20 @@ export function dateParts(iso: string, timeZone?: string): DateParts {
     weekday: WEEKDAYS[weekday]!,
   };
 }
+
+const DAY_MS = 24 * 3_600_000;
+
+/** `YYYY-MM-DD` of a time in `timeZone` (local when omitted). */
+export function localDay(timeZone?: string): (ms: number) => string {
+  const f = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone });
+  return (ms) => {
+    const p = Object.fromEntries(f.formatToParts(ms).map((x) => [x.type, x.value]));
+    return `${p.year}-${p.month}-${p.day}`;
+  };
+}
+
+/** The `count` calendar days ending with `today`, oldest first (calendar math, so DST cannot skip a day). */
+export function lastDays(today: string, count: number): string[] {
+  const base = Date.parse(`${today}T00:00:00Z`);
+  return Array.from({ length: count }, (_, i) => new Date(base - (count - 1 - i) * DAY_MS).toISOString().slice(0, 10));
+}

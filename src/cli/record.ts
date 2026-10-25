@@ -2,13 +2,15 @@
 // <data dir>/recorder.log (scripts/install-launchd.sh).
 //
 // After the Snapshot, the incremental Codex and token Backfills run at most once per hour (the last
-// run time is kept in the store), so new log lines are read in without a manual run.
+// run time is kept in the store), so new log lines are read in without a manual run. Before them,
+// the Bouncer's daily API Spend is imported from reason-bridge's files (every run; one line in the log).
 //
 // Every failure here, including configuration and opening the store, is logged and the run still
 // exits 0. launchd keeps scheduling a job that exits non-zero, but repeated quick failures get it
 // throttled, and a failing Recorder is no reason to stop retrying: the next run (5 minutes later)
 // may succeed (spec: Error handling, "Recorder failures never crash launchd loops").
 import { mkdirSync } from "node:fs";
+import { importBouncerSpend } from "../api-spend/bouncer.ts";
 import { incrementalBackfills, runDueBackfills } from "../backfill/jobs.ts";
 import { loadConfig } from "../config.ts";
 import { OpenUsageSource } from "../openusage-source.ts";
@@ -29,6 +31,8 @@ try {
     // A gap is an expected outcome, not a crash: it is stored and shown by `status`.
     log(`gap recorded: ${result.reason}`);
   }
+  const bouncer = importBouncerSpend(config.reasonBridgeDir, db, new Date());
+  if (bouncer.imported || !bouncer.ok) log(bouncer.message);
   const ran = await runDueBackfills({ backfills: incrementalBackfills(config, () => db), store: db, now: () => new Date(), log });
   if (ran.length) log(`ran ${ran.join(", ")}`);
 } catch (e) {

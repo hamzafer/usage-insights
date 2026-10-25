@@ -4,7 +4,7 @@ import { formatTokens } from "../summary.ts";
 import type { Share } from "../token-shares.ts";
 import type { Waste } from "../window-model.ts";
 import { type CycleWaste, type Report, TREND_WEEKS, type WeekTrend } from "./build.ts";
-import { amount, dayFormat, duration, percent, timeFormat } from "./format.ts";
+import { amount, apiSpendLine, dayFormat, duration, percent, timeFormat } from "./format.ts";
 import type { Suggestions } from "./suggestions.ts";
 
 export { renderTelegram } from "./card.ts";
@@ -26,7 +26,9 @@ export interface RenderOptions {
 }
 
 export function renderMarkdown(report: Report, options: RenderOptions = {}): string {
+  // API Spend stays out of renderNumbers: that text is the Suggestions prompt's input.
   const out = [`# Usage Insights Report: ${title(report, options)}`, "", renderNumbers(report, options)];
+  out.push("", "## Claude API", "", apiSpendLine(report.apiSpend));
   if (options.suggestions) {
     out.push("", "## Suggestions", "", ...suggestionLines(options.suggestions, true));
   }

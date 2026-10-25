@@ -33,6 +33,26 @@ Recorded data never lives in the repo (ADR 0002). It goes to
 | `USAGE_INSIGHTS_CLAUDE_DIR` | `~/.claude/projects` (Provider `claude`) |
 | `USAGE_INSIGHTS_CLAUDE_WORK_DIR` | `~/.claude-work/projects` (Provider `claude-work`) |
 | `USAGE_INSIGHTS_PORT` | `6740` (dashboard; only the dashboard checks it) |
+| `USAGE_INSIGHTS_REASON_BRIDGE_DIR` | `~/.config/reason-bridge` (the Bouncer's usage files, see API Spend) |
+
+### API Spend
+
+What each Anthropic API Key costs is reported by the Callers (ADR 0004), not read from Anthropic,
+and kept per day, Key, Caller and model in the `api_spend` table:
+
+- **Suggestions:** the Report's own Claude calls are priced from the reply's `usage` (prices in
+  `src/api-prices.ts`) and added to today's row, on Key `env` (`ANTHROPIC_API_KEY` set) or
+  `personal`. `--dry-run` records nothing; a recording failure is logged and never fails the Report.
+- **Bouncer:** every recording run imports today's totals from `judge-usage.json` in
+  `USAGE_INSIGHTS_REASON_BRIDGE_DIR`; the Key is named by `key_service` in its `mode.json` (default
+  `anthropic-api-key-personal`, shown as `personal`). A missing file records nothing; a damaged one
+  is logged.
+- **Report:** one line in the card's "Last week" and in the Markdown, over the 7 local days ending
+  today: `🔑 Claude API: $0.04 (personal: Bouncer $0.03, Suggestions $0.01; work: no calls)`. Under one
+  cent shows `<$0.01`; a model without a known price shows `?` (`$0.03+?` when part of the total is
+  known). It is not in the numbers the Suggestions are written from.
+
+A model without a known price stores its tokens with no cost. Only calls from these tools are counted.
 
 ## Dashboard
 

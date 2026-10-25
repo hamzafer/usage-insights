@@ -1,3 +1,5 @@
+import type { ApiSpendWeek } from "./build.ts";
+
 /** Number, time and text formatting shared by the Markdown Report and the Telegram card. */
 
 export function percent(share: number): string {
@@ -15,6 +17,34 @@ export function duration(durationMs: number): string {
 /** Overage keeps its own unit: dollars or credits, never a share of the allowance. */
 export function amount(value: number, unit: string): string {
   return unit === "$" ? `$${value.toFixed(2)}` : `${Math.round(value * 100) / 100} ${unit}`;
+}
+
+/**
+ * API Spend money: `$0.04`; a non-zero amount under one cent is `<$0.01`. An unknown price (a model
+ * without one in the price table) is never zero: `?` alone when nothing is known, else the known
+ * part followed by `+?` (at least that much).
+ */
+export function apiMoney(costUsd: number, unknown: boolean): string {
+  const known = costUsd > 0 && costUsd < 0.005 ? "<$0.01" : `$${costUsd.toFixed(2)}`;
+  if (!unknown) return known;
+  return costUsd > 0 ? `${known}+?` : "?";
+}
+
+/** `bouncer` is "Bouncer", `suggestions` "Suggestions"; any other Caller is capitalized as given. */
+export function callerName(caller: string): string {
+  return caller.charAt(0).toUpperCase() + caller.slice(1);
+}
+
+/**
+ * The Report's API Spend line (plain text; the card escapes it):
+ * `🔑 Claude API: $0.04 (personal: Bouncer $0.03, Suggestions $0.01; work: no calls)`.
+ */
+export function apiSpendLine(spend: ApiSpendWeek): string {
+  const keys = spend.keys.map((k) => {
+    const callers = k.callers.map((c) => `${callerName(c.caller)} ${apiMoney(c.costUsd, c.unknownCost)}`);
+    return `${k.key}: ${callers.length ? callers.join(", ") : "no calls"}`;
+  });
+  return `🔑 Claude API: ${apiMoney(spend.costUsd, spend.unknownCost)} (${keys.join("; ")})`;
 }
 
 /** "YYYY-MM-DD HH:MM" in the given (else the machine's) time zone. */

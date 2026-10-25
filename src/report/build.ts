@@ -1,12 +1,14 @@
 import { claudeCalibration } from "../calibration.ts";
+import { lastDays, localDay } from "../dates.ts";
 import { findLimitHits, type LimitHit } from "../limits.ts";
 import { overageUnit } from "../overage.ts";
 import { type Pace, paceOfRunningCycles } from "../pace.ts";
 import { LIVE_SOURCE } from "../providers.ts";
 import { type GapMarker, READING_GAP_TOLERANCE_MS } from "../sessions.ts";
-import type { TokenEvent } from "../store.ts";
+import type { ApiSpendRow, TokenEvent } from "../store.ts";
 import { type TokenShares, topUsage } from "../token-shares.ts";
 import { type Basis, deriveWindows, type Reading, type Waste, type Window } from "../window-model.ts";
+import { dayFormat } from "./format.ts";
 
 /**
  * The Report's numbers (spec §6, GLOSSARY: Report): computed without Claude, so they go out even
@@ -21,6 +23,8 @@ export interface ReportInput {
   /** Token events: at least the Report's week and the 4 weeks before it; all of them for the Claude calibration. */
   tokens: readonly TokenEvent[];
   now: string;
+  /** API Spend rows for the Report's local days (`apiSpendDays`); none when omitted. */
+  apiSpend?: readonly ApiSpendRow[];
   /** Problems getting fresh data (e.g. a failed Backfill), shown in the Report as they are. */
   dataNotes?: readonly string[];
 }
@@ -77,6 +81,33 @@ export interface ProviderCoverage {
   unknownMs: number;
 }
 
+/** One Caller's API Spend through one Key in the week, all models together. */
+export interface ApiSpendCaller {
+  caller: string;
+  calls: number;
+  /** USD of the models with a known price. */
+  costUsd: number;
+  /** A model without a known price was used: the real cost is at least `costUsd`. */
+  unknownCost: boolean;
+}
+
+export interface ApiSpendKey {
+  key: string;
+  calls: number;
+  costUsd: number;
+  unknownCost: boolean;
+  /** By Caller name; empty for a Key without calls (the Report says "no calls"). */
+  callers: ApiSpendCaller[];
+}
+
+/** API Spend in the week (GLOSSARY: API Spend); not part of any Provider's allowance or Overage. */
+export interface ApiSpendWeek {
+  costUsd: number;
+  unknownCost: boolean;
+  /** `personal`, `work`, then any other Key with calls. */
+  keys: ApiSpendKey[];
+}
+
 export interface Report {
   from: string;
   to: string;
@@ -84,6 +115,7 @@ export interface Report {
   pace: Pace[];
   limitHits: WeekLimitHit[];
   overage: WeekOverage[];
+  apiSpend: ApiSpendWeek;
   /** Tokens per Project and model in the week, all Providers (shares of tokens, not of the allowance). */
   top: TokenShares;
   trend: {
@@ -101,7 +133,8 @@ export interface Report {
   dataNotes: string[];
 }
 
-export const WEEK_MS = 7 * 24 * 3_600_000;
+const DAY_MS = 24 * 3_600_000;
+export const WEEK_MS = 7 * DAY_MS;
 /** How many weeks before the Report's week the trend compares with. */
 export const TREND_WEEKS = 4;
 /** Projects and models named in the Report. */
@@ -137,6 +170,7 @@ export function buildReport(input: ReportInput): Report {
     pace: paceOfRunningCycles(windows),
     limitHits: weekHits,
     overage: overageBetween(overageReadings, fromMs, toMs),
+    apiSpend: apiSpendWeek(input.apiSpend ?? []),
     top: topUsage(input.tokens, { from: iso(fromMs), to: iso(toMs), limit: REPORT_TOP }),
     trend: {
       waste: wasteTrend(ended, fromMs, toMs),
@@ -157,6 +191,35 @@ export function buildReport(input: ReportInput): Report {
     },
     dataNotes: [...(input.dataNotes ?? [])],
   };
+}
+
+/** Keys always listed, in this order, even without calls; other Keys follow when they have rows. */
+const API_KEYS = ["personal", "work"];
+
+/**
+ * The local days API Spend is read for (`Store.apiSpend`): the 7 local days ending with the day of
+ * `now`. API Spend is stored per local day, so this is the nearest whole-day fit for the Report's
+ * 7 days.
+ */
+export function apiSpendDays(now: string, timeZone?: string): { from: string; to: string } {
+  return { from: lastDays(localDay(timeZone)(ms(now)), 7)[0]!, to: dayFormat(timeZone)(now) };
+}
+
+function apiSpendWeek(rows: readonly ApiSpendRow[]): ApiSpendWeek {
+  const sum = (items: readonly { costUsd: number | null }[]) => ({
+    costUsd: items.reduce((s, r) => s + (r.costUsd ?? 0), 0),
+    unknownCost: items.some((r) => r.costUsd === null),
+  });
+  const byKey = Map.groupBy(rows, (r) => r.key);
+  const names = [...API_KEYS, ...[...byKey.keys()].filter((k) => !API_KEYS.includes(k)).toSorted(compare)];
+  const keys = names.map((key) => {
+    const keyRows = byKey.get(key) ?? [];
+    const callers = [...Map.groupBy(keyRows, (r) => r.caller)]
+      .map(([caller, list]) => ({ caller, calls: list.reduce((s, r) => s + r.calls, 0), ...sum(list) }))
+      .toSorted((a, b) => compare(a.caller, b.caller));
+    return { key, calls: keyRows.reduce((s, r) => s + r.calls, 0), ...sum(keyRows), callers };
+  });
+  return { ...sum(rows), keys };
 }
 
 /**

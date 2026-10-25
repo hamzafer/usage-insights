@@ -58,6 +58,7 @@ exports[`Telegram card (HTML) 1`] = `
 <b>✅ Last week</b>
 Codex reset 1× · 20% wasted (↓ from 40%)
 🚫 Limit hits: 1 (was 0/wk) · blocked 2h   💸 Overage: $15
+🔑 Claude API: $0.00 (personal: no calls; work: no calls)
 ⚠️ Codex Backfill failed: disk unreadable
 
 <b>💡 Suggestions</b>

@@ -187,3 +187,16 @@ test("--dry-run runs no Backfill and records nothing (it writes nothing)", async
   expect(ran).toEqual(["load"]);
   expect(runs).toEqual([]);
 });
+
+test("the Report's API Spend comes from the rows load returns for the 7 local days ending today", async () => {
+  const days: { from: string; to: string }[] = [];
+  const { d, saved } = deps({
+    load: (spendDays) => {
+      days.push(spendDays);
+      return { readings: input.readings, gaps: input.gaps, tokens: input.tokens, apiSpend: [{ day: "2026-10-10", key: "work", caller: "bouncer", model: "m", calls: 1, input: 1, cacheWrite: 0, cacheRead: 0, output: 1, costUsd: 0.02 }] };
+    },
+  });
+  await runReport(d);
+  expect(days).toEqual([{ from: "2026-10-06", to: "2026-10-12" }]);
+  expect(saved[0]!.markdown).toContain("🔑 Claude API: $0.02 (personal: no calls; work: Bouncer $0.02)");
+});
