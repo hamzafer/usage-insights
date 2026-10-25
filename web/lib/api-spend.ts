@@ -17,7 +17,8 @@ export interface ApiSpendRow {
 }
 
 export function money({ costUsd, partial }: ApiSpendSum): string {
-  if (costUsd === null) return "?";
+  // Nothing priced is known (all unknown, or only unknown beside $0): `?`, as in the Report.
+  if (costUsd === null || (partial && costUsd === 0)) return "?";
   const plus = partial ? "+?" : "";
   if (costUsd > 0 && costUsd < 0.005) return `<$0.01${plus}`;
   return `$${costUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${plus}`;

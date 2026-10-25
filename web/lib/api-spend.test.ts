@@ -18,6 +18,7 @@ describe("money", () => {
   test("a partial sum is a lower bound", () => {
     expect(money(sum(0.04, 3, true))).toBe("$0.04+?");
     expect(money(sum(0.002, 3, true))).toBe("<$0.01+?");
+    expect(money(sum(0, 2, true))).toBe("?");
   });
 });
 
