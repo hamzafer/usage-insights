@@ -38,3 +38,10 @@ test("an unknown model keeps its tokens and has no cost", () => {
   const spend = priceUsage("claude-future-9", { input_tokens: 5, output_tokens: 7 });
   expect(spend).toEqual({ input: 5, cacheWrite: 0, cacheRead: 0, output: 7, costUsd: null });
 });
+
+test("a dated model id is priced as its base model", () => {
+  const dated = priceUsage("claude-sonnet-5-5-20261001", { input_tokens: 1_000_000, output_tokens: 100_000 });
+  expect(dated).toEqual(priceUsage("claude-sonnet-5-5", { input_tokens: 1_000_000, output_tokens: 100_000 }));
+  expect(dated.costUsd).toBe(3);
+  expect(priceUsage("claude-mystery-9-20261001", { input_tokens: 1 }).costUsd).toBeNull();
+});

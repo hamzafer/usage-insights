@@ -46,7 +46,8 @@ export function priceUsage(model: string, usage: MessageUsage): PricedUsage {
   const fiveMinutes = usage.cache_creation?.ephemeral_5m_input_tokens ?? 0;
   // The total wins; writes it does not explain by the breakdown count as 5-minute ones.
   const cacheWrite = usage.cache_creation_input_tokens ?? fiveMinutes + oneHour;
-  const price = PRICES[model];
+  // The API reports dated ids (`claude-sonnet-5-5-20261001`); they cost what the base model does.
+  const price = PRICES[model] ?? PRICES[model.replace(/-\d{8}$/, "")];
   if (!price) return { input, cacheWrite, cacheRead, output, costUsd: null };
   const shortWrites = Math.max(0, cacheWrite - oneHour);
   const costUsd =
