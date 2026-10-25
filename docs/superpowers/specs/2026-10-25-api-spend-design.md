@@ -70,8 +70,8 @@ not modelled. An unknown model stores tokens with `cost_usd` NULL, shown as "?".
 
 ## Recording
 
-1. **Suggestions:** `AnthropicClient` gets an optional `onUsage(usage)` hook called after every
-   successful reply (both the Suggestions call and the shorten call), with the model and token
+1. **Suggestions:** `AnthropicClient` gets an optional `onUsage(usage)` hook called after every HTTP-OK
+   reply that carries `usage` (refusals and cut-off answers are billed too; both the Suggestions call and the shorten call), with the model and token
    counts. The Report run wires it to `store.addApiSpend` with caller `suggestions` and the Key name
    (`env` when `ANTHROPIC_API_KEY` was used, else the Keychain service's name). Dry runs (read-only
    store) record nothing. Recording failures are logged and never fail the Report.
