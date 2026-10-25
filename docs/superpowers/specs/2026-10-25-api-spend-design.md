@@ -78,7 +78,7 @@ not modelled. An unknown model stores tokens with `cost_usd` NULL, shown as "?".
 2. **Bouncer:** every Recorder run (5 min) reads `judge-usage.json` and `mode.json` from the
    reason-bridge config dir (`USAGE_INSIGHTS_REASON_BRIDGE_DIR`, default `~/.config/reason-bridge`)
    and calls `setApiSpend` for the file's `date` with its `calls`, `input_tokens`, `output_tokens`
-   and `cost_usd` (the Bouncer's own figure, already priced). A missing file records nothing; a
+   and `cost_usd` (the Bouncer's own figure, already priced; it includes reason-bridge's worst-case estimate for calls whose cost the API did not report, so it can only overstate). reason-bridge omits zero token counts from the file; absent ones count as 0. A missing file records nothing; a
    damaged one is logged; neither stores a gap or fails the run. The file holds only today, so calls
    in the last minutes before midnight after the final read are lost (at most 5 minutes a day).
 

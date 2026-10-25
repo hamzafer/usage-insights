@@ -10,7 +10,11 @@ import { keyNameFromService } from "./keys.ts";
  * logged. Nothing here throws: the Recorder run goes on whatever the files hold.
  */
 
-/** reason-bridge's judge model (its `Model` constant); its cost is already priced in the file. */
+/**
+ * Mirrors reason-bridge's judge model (its `Model` constant); its cost is already priced in the file.
+ * The file's `cost_usd` already includes reason-bridge's worst-case estimate (`EstimatedCallUSD`) for
+ * calls whose cost the API did not report (`UnknownCost`), so it can only overstate, never understate.
+ */
 const BOUNCER_MODEL = "claude-haiku-5-5";
 const DEFAULT_KEY_SERVICE = "anthropic-api-key-personal";
 
@@ -42,8 +46,10 @@ export function importBouncerSpend(dir: string, store: Pick<Store, "setApiSpend"
 function parseUsage(raw: string, key: string, now: Date): ApiSpendRow {
   const data: unknown = JSON.parse(raw);
   if (typeof data !== "object" || data === null) throw new Error("not an object");
-  const field = (name: string): number => {
+  // reason-bridge writes the token counts with Go `omitempty`: zero means absent, not damaged.
+  const field = (name: string, optional = false): number => {
     const value = (data as Record<string, unknown>)[name];
+    if (optional && value === undefined) return 0;
     if (typeof value !== "number" || !Number.isFinite(value) || value < 0) throw new Error(`${name} is not a number`);
     return value;
   };
@@ -55,10 +61,10 @@ function parseUsage(raw: string, key: string, now: Date): ApiSpendRow {
     caller: "bouncer",
     model: BOUNCER_MODEL,
     calls: field("calls"),
-    input: field("input_tokens"),
+    input: field("input_tokens", true),
     cacheWrite: 0,
     cacheRead: 0,
-    output: field("output_tokens"),
+    output: field("output_tokens", true),
     costUsd: field("cost_usd"),
     updatedAt: now.toISOString(),
   };

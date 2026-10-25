@@ -85,3 +85,21 @@ test("a store failure is reported, never thrown", () => {
   };
   expect(importBouncerSpend(dir, failing, NOW)).toEqual({ ok: false, imported: false, message: "bouncer usage not stored: readonly database" });
 });
+
+test("absent token counts are zero (reason-bridge omits zeros)", () => {
+  write("judge-usage.json", { date: "2026-10-25", calls: 2, failed: 2, cost_usd: 0 });
+  expect(importBouncerSpend(dir, store, NOW).ok).toBe(true);
+  expect(rows[0]).toMatchObject({ calls: 2, input: 0, output: 0, costUsd: 0 });
+});
+
+test("a file set aside as exhausted imports as zero tokens", () => {
+  write("judge-usage.json", { date: "2026-10-25", calls: 0, cost_usd: 0, exhausted: true });
+  expect(importBouncerSpend(dir, store, NOW).ok).toBe(true);
+  expect(rows[0]).toMatchObject({ calls: 0, input: 0, output: 0, costUsd: 0 });
+});
+
+test("a present token count of the wrong type is still rejected", () => {
+  write("judge-usage.json", { ...usage, input_tokens: "40000" });
+  expect(importBouncerSpend(dir, store, NOW).ok).toBe(false);
+  expect(rows).toEqual([]);
+});
