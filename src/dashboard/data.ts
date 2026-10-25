@@ -24,6 +24,7 @@ export function loadDashboardData(dbPath: string, needs: DataNeeds = { tokens: "
       tokens,
       runs: store.recentRuns(RECENT_RUNS),
       sessionTokens,
+      apiSpend: needs.apiSpendFrom === undefined ? undefined : store.apiSpend({ from: needs.apiSpendFrom }),
       tokenProviders: typeof needs.tokens === "object" && !sessionTokens ? store.tokenProviders() : undefined,
     };
   } finally {

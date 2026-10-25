@@ -213,6 +213,28 @@ describe("API", () => {
     expect(Array.isArray(week.overage)).toBe(true);
   });
 
+  test("API Spend: per Key spend from the store, reading only the 30 days", async () => {
+    const store = openStore(dbPath);
+    const spend = { caller: "bouncer", model: "claude-haiku-4-5", calls: 2, input: 0, cacheWrite: 0, cacheRead: 0, output: 0 };
+    store.addApiSpend({ ...spend, day: "2026-10-05", key: "personal", costUsd: 0.04 });
+    store.addApiSpend({ ...spend, day: "2026-09-01", key: "personal", costUsd: 9 }); // before the 30 days
+    store.close();
+
+    const res = await get("/api/api-spend");
+    expect(res.status).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.keys.map((k: { key: string }) => k.key)).toEqual(["personal", "work"]);
+    expect(body.keys[0].last30d).toEqual({ costUsd: 0.04, calls: 2, partial: false });
+    expect(body.keys[0].callers).toHaveLength(1);
+    expect(body.keys[0].daily).toHaveLength(30);
+    expect(body.keys[1].last30d).toEqual({ costUsd: 0, calls: 0, partial: false });
+
+    let asked: DataNeeds | undefined;
+    const spy = dashboardHandler({ load: (needs) => ((asked = needs), loadDashboardData(dbPath, needs)), now: () => new Date(NOW), timeZone: "UTC" });
+    await spy(new Request("http://127.0.0.1/api/api-spend"));
+    expect(asked).toEqual({ tokens: "none", apiSpendFrom: "2026-09-04" });
+  });
+
   test("without a built export, pages say how to build the app (never old HTML)", async () => {
     for (const path of ["/", "/legacy", "/health", "/projects", "/provider/codex"]) {
       const res = await get(path);

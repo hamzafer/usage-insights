@@ -265,3 +265,25 @@ export interface LastWeek {
   limitHits: { count: number; previousAvg: number | null; blockedMs: number };
   overage: { unit: string; spent: number }[];
 }
+
+/**
+ * One sum of API Spend (src/dashboard/api-spend.ts). `costUsd` is null when every price in it is
+ * unknown; `partial` means some are, so `costUsd` is only the known part.
+ */
+export interface ApiSpendSum {
+  costUsd: number | null;
+  calls: number;
+  partial: boolean;
+}
+
+/** `GET /api/api-spend` (buildApiSpend in src/dashboard/api-spend.ts): spend per Key from the Callers' own calls. */
+export interface ApiSpend {
+  keys: {
+    key: string;
+    last7d: ApiSpendSum;
+    last30d: ApiSpendSum;
+    callers: { caller: string; model: string; modelName: string; last7d: ApiSpendSum; last30d: ApiSpendSum }[];
+    /** Oldest first, today last: the 30 local days, 0 where there are no rows. */
+    daily: { day: string; costUsd: number | null; partial: boolean }[];
+  }[];
+}

@@ -7,6 +7,7 @@ import {
   type TopSessionRange,
   topSessions,
 } from "../top-sessions.ts";
+import { apiSpendFrom, buildApiSpend } from "./api-spend.ts";
 import { buildHero } from "./hero.ts";
 import { buildCycleHistory } from "./history.ts";
 import { hasExport, serveStatic, staticNotFound } from "./static.ts";
@@ -82,7 +83,7 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
 
     let data: DashboardData;
     try {
-      data = deps.load(needsOf(path, url.searchParams, at));
+      data = deps.load(needsOf(path, url.searchParams, at, deps.timeZone));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       log(`dashboard: could not read the data: ${message}`);
@@ -92,6 +93,7 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
     if (path === "/api/overview") return json({ now: at.toISOString(), providers: buildOverview(data, at) });
     if (path === "/api/health") return json(buildHealth(data, at));
     if (path === "/api/last-week") return json(lastWeek(data, at));
+    if (path === "/api/api-spend") return json(buildApiSpend(data.apiSpend ?? [], at, deps.timeZone));
     const historyOf = /^\/api\/history\/([^/]+)$/.exec(path)?.[1];
     if (historyOf !== undefined) {
       const id = decodePathPart(historyOf);
@@ -129,9 +131,11 @@ export function dashboardHandler(deps: DashboardDeps): (req: Request) => Respons
 
 /**
  * Which token rows a request needs. Overview, hero and Provider history use none; the Claude
- * calibration (health, history, Last week, top sessions) uses all; ranges only their own days.
+ * calibration (health, history, Last week, top sessions) uses all; ranges only their own days. API Spend
+ * reads only its 30 days.
  */
-function needsOf(path: string, params: URLSearchParams, at: Date): DataNeeds {
+function needsOf(path: string, params: URLSearchParams, at: Date, timeZone?: string): DataNeeds {
+  if (path === "/api/api-spend") return { tokens: "none", apiSpendFrom: apiSpendFrom(at, timeZone) };
   if (path === "/api/sessions/top") return { tokens: "all", sessionTokens: true };
   if (path === "/api/tokens/daily") return { tokens: { from: tokensDailyFrom(at) } };
   if (path === "/api/projects") {

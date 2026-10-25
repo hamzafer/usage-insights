@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ApiSpend } from "@/components/overview/api-spend";
 import { HeroChart } from "@/components/overview/hero-chart";
 import { LastWeekRow } from "@/components/overview/last-week";
 import { PlanTiles, PlanTilesSkeleton } from "@/components/overview/plan-tiles";
@@ -57,6 +58,7 @@ export function OverviewPage() {
       <PlanTiles overview={data} tiles={tiles} selected={plan.key} onSelect={setPicked} />
       <HeroChart plan={plan} overview={data} />
       <LastWeekRow />
+      <ApiSpend />
     </Page>
   );
 }

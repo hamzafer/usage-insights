@@ -4,7 +4,7 @@ import type { CycleOverage } from "../overage.ts";
 import type { Pace } from "../pace.ts";
 import { paceStatus, type Status } from "../pace-status.ts";
 import { idleCapacity, READING_GAP_TOLERANCE_MS } from "../sessions.ts";
-import type { Gap, RunOutcome, SessionTokenEvent, StoredReading, TokenEvent } from "../store.ts";
+import type { ApiSpendRow, Gap, RunOutcome, SessionTokenEvent, StoredReading, TokenEvent } from "../store.ts";
 import { basisOfSource, LIVE_SOURCE } from "../providers.ts";
 import { type CycleTokens, tokensByCycle } from "../token-shares.ts";
 import { type Basis, deriveWindows, type Reading, type Waste, type Window } from "../window-model.ts";
@@ -30,6 +30,8 @@ export interface DashboardData {
   sessionTokens?: SessionTokenEvent[];
   /** Every Provider with token events, when `tokens` holds only a range of them; else from `tokens`. */
   tokenProviders?: string[];
+  /** API Spend rows from `apiSpendFrom` on, oldest day first; none when omitted. */
+  apiSpend?: ApiSpendRow[];
 }
 
 /**
@@ -41,6 +43,8 @@ export interface DataNeeds {
   tokens: "none" | "all" | { from: string };
   /** Token rows with their session (top sessions); they then also serve as `tokens`. */
   sessionTokens?: boolean;
+  /** API Spend rows with `day` at or after this (YYYY-MM-DD); none when omitted. */
+  apiSpendFrom?: string;
 }
 
 export interface CycleResult {
