@@ -28,6 +28,7 @@ function run(script: string, openUsageUrl: string, extraEnv: Record<string, stri
       USAGE_INSIGHTS_CODEX_DIR: join(dataDir, "no-codex"),
       USAGE_INSIGHTS_CLAUDE_DIR: join(dataDir, "no-claude"),
       USAGE_INSIGHTS_CLAUDE_WORK_DIR: join(dataDir, "no-claude-work"),
+      USAGE_INSIGHTS_REASON_BRIDGE_DIR: join(dataDir, "no-reason-bridge"),
       ...extraEnv,
     },
   });
@@ -67,6 +68,33 @@ describe("record and status", () => {
     const store = openStore(join(dataDir, "usage.db"));
     expect(store.recentRuns(10).map((r) => r.job).toSorted()).toEqual(["backfill:codex", "backfill:tokens"]);
     store.close();
+  });
+
+  test("record imports the Bouncer's daily API Spend on every run, logging one short line", () => {
+    const bridge = join(dataDir, "bridge");
+    mkdirSync(bridge);
+    const usage = { date: "2026-10-25", calls: 3, allow: 3, ask: 0, failed: 0, cost_usd: 0.01, input_tokens: 900, output_tokens: 30 };
+    writeFileSync(join(bridge, "judge-usage.json"), JSON.stringify(usage));
+    writeFileSync(join(bridge, "mode.json"), JSON.stringify({ key_service: "anthropic-api-key-work", note: "SECRET-NOTE" }));
+    const env = { USAGE_INSIGHTS_REASON_BRIDGE_DIR: bridge };
+    const first = run("src/cli/record.ts", deadUrl, env);
+    expect(first.out).toContain("bouncer 3 calls on work");
+    expect(first.out).not.toContain("SECRET-NOTE");
+    writeFileSync(join(bridge, "judge-usage.json"), JSON.stringify({ ...usage, calls: 5 }));
+    run("src/cli/record.ts", deadUrl, env);
+    const store = openStore(join(dataDir, "usage.db"));
+    expect(store.apiSpend().map((r) => `${r.day} ${r.key} ${r.caller} ${r.calls}`)).toEqual(["2026-10-25 work bouncer 5"]);
+    store.close();
+  });
+
+  test("record with a damaged Bouncer file logs the reason and the run goes on", () => {
+    const bridge = join(dataDir, "bridge");
+    mkdirSync(bridge);
+    writeFileSync(join(bridge, "judge-usage.json"), "{oops");
+    const recorded = run("src/cli/record.ts", deadUrl, { USAGE_INSIGHTS_REASON_BRIDGE_DIR: bridge });
+    expect(recorded.code).toBe(0);
+    expect(recorded.out).toContain("gap recorded");
+    expect(recorded.out).toContain("bouncer usage file unreadable");
   });
 
   test("record ignores a bad USAGE_INSIGHTS_PORT (only the dashboard uses it)", () => {

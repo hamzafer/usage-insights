@@ -19,6 +19,8 @@ export interface Config {
   suggestionsModel?: string;
   /** Messages API endpoint for Suggestions; undefined: the Anthropic API. */
   anthropicUrl?: string;
+  /** reason-bridge's config directory, where the Bouncer keeps its daily usage (API Spend). */
+  reasonBridgeDir: string;
 }
 
 export const DEFAULT_DASHBOARD_PORT = 6740;
@@ -35,6 +37,8 @@ export const DEFAULT_OPENUSAGE_URL = "http://127.0.0.1:6736/v1/usage";
  * - USAGE_INSIGHTS_CLAUDE_WORK_DIR (default `~/.claude-work/projects`): Provider `claude-work`
  * - USAGE_INSIGHTS_CLAUDE_MODEL: the Claude model for Suggestions
  * - USAGE_INSIGHTS_ANTHROPIC_URL: the Messages API endpoint for Suggestions (tests)
+ * - USAGE_INSIGHTS_REASON_BRIDGE_DIR (default `~/.config/reason-bridge`): the Bouncer's `judge-usage.json`
+ *   and `mode.json`, read by every recording run
  * (The Anthropic API key is not configuration: Keychain, or ANTHROPIC_API_KEY; see src/report/anthropic-client.ts.)
  */
 export function loadConfig(
@@ -55,6 +59,7 @@ export function loadConfig(
     ],
     suggestionsModel: env.USAGE_INSIGHTS_CLAUDE_MODEL || undefined,
     anthropicUrl: env.USAGE_INSIGHTS_ANTHROPIC_URL || undefined,
+    reasonBridgeDir: env.USAGE_INSIGHTS_REASON_BRIDGE_DIR || join(home, ".config", "reason-bridge"),
   };
 }
 

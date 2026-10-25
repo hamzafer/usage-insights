@@ -86,3 +86,30 @@ test("the API key comes from ANTHROPIC_API_KEY, else the Keychain, else a clear 
     "Anthropic API key not found: no ANTHROPIC_API_KEY and no Keychain item anthropic-api-key-personal",
   );
 });
+
+test("onUsage gets the model and usage of each accepted reply, never the key", async () => {
+  const usage = { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 0 };
+  const { fn } = fakeFetch(() =>
+    Response.json({ type: "message", model: "claude-sonnet-5-5", stop_reason: "end_turn", usage, content: [{ type: "text", text: "{}" }] }),
+  );
+  const seen: unknown[] = [];
+  await new AnthropicClient({ apiKey: () => KEY, fetch: fn, onUsage: (u) => void seen.push(u) }).ask(PROMPT);
+  expect(seen).toEqual([{ model: "claude-sonnet-5-5", usage }]);
+  expect(JSON.stringify(seen)).not.toContain(KEY);
+});
+
+test("onUsage falls back to the requested model, is skipped on errors, and a throwing hook never fails the call", async () => {
+  const usage = { input_tokens: 1, output_tokens: 1 };
+  const ok = fakeFetch(() => Response.json({ stop_reason: "end_turn", usage, content: [{ type: "text", text: "x" }] }));
+  const seen: string[] = [];
+  const hook = (u: { model: string }) => {
+    seen.push(u.model);
+    throw new Error("boom");
+  };
+  const c = (f: typeof fetch) => new AnthropicClient({ apiKey: () => KEY, fetch: f, model: "claude-haiku-5-5", onUsage: hook });
+  expect(await c(ok.fn).ask(PROMPT)).toBe("x");
+  expect(seen).toEqual(["claude-haiku-5-5"]);
+  const failing = fakeFetch(() => Response.json({ error: { message: "nope" }, usage }, { status: 500 }));
+  await expect(c(failing.fn).ask(PROMPT)).rejects.toThrow("HTTP 500");
+  expect(seen).toHaveLength(1);
+});

@@ -50,3 +50,8 @@ test("Claude Code logs: both accounts' projects directories unless the environme
     { provider: "claude-work", dir: "/tmp/cw" },
   ]);
 });
+
+test("the reason-bridge directory defaults to ~/.config/reason-bridge and can be set", () => {
+  expect(loadConfig({}, "/home/someone").reasonBridgeDir).toBe("/home/someone/.config/reason-bridge");
+  expect(loadConfig({ USAGE_INSIGHTS_REASON_BRIDGE_DIR: "/tmp/rb" }, "/home/someone").reasonBridgeDir).toBe("/tmp/rb");
+});

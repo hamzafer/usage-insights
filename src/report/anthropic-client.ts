@@ -1,3 +1,4 @@
+import type { MessageUsage } from "../api-prices.ts";
 import type { ClaudeClient } from "./claude-suggestions.ts";
 
 /**
@@ -13,6 +14,12 @@ export const DEFAULT_TIMEOUT_MS = 60_000;
 /** The personal Anthropic API key's Keychain service (spec §6). */
 export const KEYCHAIN_SERVICE = "anthropic-api-key-personal";
 
+/** The model and token counts of one reply, for `onUsage`. */
+export interface AnthropicUsage {
+  model: string;
+  usage: MessageUsage;
+}
+
 export interface AnthropicClientOptions {
   /** Called once per request; throws when no key is found. */
   apiKey: () => string;
@@ -20,6 +27,12 @@ export interface AnthropicClientOptions {
   url?: string;
   timeoutMs?: number;
   fetch?: typeof fetch;
+  /**
+   * Called after every reply the API accepted (even a refusal or cut-off answer, which are billed),
+   * with the model and token counts. Never given the key. A throw is ignored: the hook reports its
+   * own problems, and recording must not fail a call.
+   */
+  onUsage?: (usage: AnthropicUsage) => void;
 }
 
 const SCHEMA = {
@@ -69,6 +82,13 @@ export class AnthropicClient implements ClaudeClient {
       throw new Error(`Claude API error (HTTP ${response.status}): ${detail}`.slice(0, 300));
     }
     if (!data) throw new Error("Claude API returned no JSON");
+    if (data.usage) {
+      try {
+        this.options.onUsage?.({ model: data.model ?? body.model, usage: data.usage });
+      } catch {
+        // see onUsage
+      }
+    }
     if (data.stop_reason === "refusal") throw new Error("Claude declined to answer");
     if (data.stop_reason === "max_tokens") throw new Error("Claude's answer was cut off");
     return (data.content ?? [])
@@ -79,6 +99,8 @@ export class AnthropicClient implements ClaudeClient {
 }
 
 interface MessageResponse {
+  model?: string;
+  usage?: MessageUsage;
   stop_reason?: string;
   content?: { type: string; text?: string }[];
   error?: { type?: string; message?: string };

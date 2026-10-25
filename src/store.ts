@@ -82,6 +82,28 @@ export interface RunOutcome {
 }
 
 /**
+ * One day of Anthropic API spend by one Key, Caller and model (spec: API Spend). `key` is the Key's
+ * name (`personal`, `work`, or `env` for ANTHROPIC_API_KEY); `input` excludes cache reads and writes.
+ */
+export interface ApiSpendRow {
+  /** Local date, YYYY-MM-DD. */
+  day: string;
+  key: string;
+  /** `suggestions` or `bouncer`. */
+  caller: string;
+  model: string;
+  calls: number;
+  input: number;
+  cacheWrite: number;
+  cacheRead: number;
+  output: number;
+  /** USD; null when the model has no known price (never read as zero). */
+  costUsd: number | null;
+  /** When the row was last written; the store's clock when omitted on a write. */
+  updatedAt?: string;
+}
+
+/**
  * Schema migrations, applied in order. The database's `user_version` pragma holds how many
  * have run. Never edit a shipped migration; append a new one.
  */
@@ -149,6 +171,21 @@ export const MIGRATIONS: string[] = [
   `ALTER TABLE token_events ADD COLUMN session TEXT;
    CREATE INDEX token_events_by_session ON token_events (provider, session);
    DELETE FROM backfill_progress WHERE source LIKE 'tokens:%';`,
+  // Anthropic API spend per day, Key, Caller and model, reported by the Callers (ADR 0004).
+  `CREATE TABLE api_spend (
+     day         TEXT NOT NULL,
+     key         TEXT NOT NULL,
+     caller      TEXT NOT NULL,
+     model       TEXT NOT NULL,
+     calls       INTEGER NOT NULL,
+     input       INTEGER NOT NULL,
+     cache_write INTEGER NOT NULL,
+     cache_read  INTEGER NOT NULL,
+     output      INTEGER NOT NULL,
+     cost_usd    REAL,
+     updated_at  TEXT NOT NULL,
+     PRIMARY KEY (day, key, caller, model)
+   );`,
 ];
 
 /** How long a statement waits for another process's lock before failing. */
@@ -183,6 +220,16 @@ export interface Store {
   tokenProviders(): string[];
   /** As tokenUsage, with each event's session. */
   sessionTokenUsage(range?: { from?: string; to?: string }): SessionTokenEvent[];
+  /**
+   * Adds to the day's row of (day, key, caller, model): calls and tokens are summed, and so is the
+   * cost, except that a NULL cost on either side makes the sum NULL (an unknown price is never
+   * counted as zero).
+   */
+  addApiSpend(row: ApiSpendRow): void;
+  /** Replaces the day's row (a Caller that keeps its own daily totals). */
+  setApiSpend(row: ApiSpendRow): void;
+  /** API spend rows with `day` from `from` to `to` (inclusive, YYYY-MM-DD), oldest day first. */
+  apiSpend(range?: { from?: string; to?: string }): ApiSpendRow[];
   saveRun(outcome: RunOutcome): void;
   /** The newest run outcomes first. */
   recentRuns(limit: number): RunOutcome[];
@@ -253,8 +300,36 @@ export function openStore(path: string, options: { readonly?: boolean } = {}): S
     return added;
   });
 
+  const apiSpendColumns =
+    "(day, key, caller, model, calls, input, cache_write, cache_read, output, cost_usd, updated_at)";
+  const apiSpendValues =
+    "($day, $key, $caller, $model, $calls, $input, $cacheWrite, $cacheRead, $output, $costUsd, $updatedAt)";
+  const addSpend = db.prepare(
+    `INSERT INTO api_spend ${apiSpendColumns} VALUES ${apiSpendValues}
+       ON CONFLICT (day, key, caller, model) DO UPDATE SET
+         calls = calls + excluded.calls,
+         input = input + excluded.input,
+         cache_write = cache_write + excluded.cache_write,
+         cache_read = cache_read + excluded.cache_read,
+         output = output + excluded.output,
+         cost_usd = cost_usd + excluded.cost_usd,
+         updated_at = excluded.updated_at`,
+  );
+  const setSpend = db.prepare(`INSERT OR REPLACE INTO api_spend ${apiSpendColumns} VALUES ${apiSpendValues}`);
+  const spendParams = (row: ApiSpendRow) => ({ ...row, updatedAt: row.updatedAt ?? new Date().toISOString() });
+
   return {
     saveReadings: (readings) => insertMany(readings),
+    addApiSpend: (row) => void addSpend.run(spendParams(row)),
+    setApiSpend: (row) => void setSpend.run(spendParams(row)),
+    apiSpend: ({ from = "", to = "\uffff" } = {}) =>
+      db
+        .query<ApiSpendRow, [string, string]>(
+          `SELECT day, key, caller, model, calls, input, cache_write AS cacheWrite, cache_read AS cacheRead,
+                  output, cost_usd AS costUsd, updated_at AS updatedAt
+             FROM api_spend WHERE day >= ? AND day <= ? ORDER BY day, key, caller, model`,
+        )
+        .all(from, to),
     saveTokenEvents: (events) => saveTokens(events),
     tokenUsage: ({ from = "", to = "￿" } = {}) =>
       db
