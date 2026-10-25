@@ -3,7 +3,7 @@ import type { ApiSpend, ApiSpendSum } from "./types";
 /**
  * The Overview's "Claude API" section: API Spend per Key and Caller as display strings. Pure,
  * tested with `bun test`. Money follows the Report's line: `$0.04`, `<$0.01` for a non-zero amount
- * under a cent, `?` for an unknown price (ADR 0004), `$0.04+` when only part of a sum is priced.
+ * under a cent, `?` for an unknown price (ADR 0004), `$0.04+?` when only part of a sum is priced (the Report's notation).
  */
 export interface ApiSpendRow {
   key: string;
@@ -18,7 +18,7 @@ export interface ApiSpendRow {
 
 export function money({ costUsd, partial }: ApiSpendSum): string {
   if (costUsd === null) return "?";
-  const plus = partial ? "+" : "";
+  const plus = partial ? "+?" : "";
   if (costUsd > 0 && costUsd < 0.005) return `<$0.01${plus}`;
   return `$${costUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${plus}`;
 }

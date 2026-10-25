@@ -95,6 +95,9 @@ not modelled. An unknown model stores tokens with `cost_usd` NULL, shown as "?".
 - **Report:** one line in the Telegram card's Last week section and the Markdown Report:
   `🔑 Claude API: $0.04 (personal: Bouncer $0.03, Suggestions $0.01; work: no calls)`.
   Money under one cent shows as `<$0.01`.
+- **Unknown cost** (a model without a price) is never shown as zero, in the Report and on the
+  dashboard alike: `?` when unknown, `+?` after a known amount when only part is unknown
+  (`$0.03+?`: at least that much).
 
 ## Out of scope
 
