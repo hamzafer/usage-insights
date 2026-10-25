@@ -71,6 +71,18 @@ _Avoid_: recommendation, tip, insight
 Which **Provider**, plan (and its price) and model is used for which job (coding, reviews, side projects). Written and kept up to date by the user; the source of truth for **Suggestions**.
 _Avoid_: config, stack
 
+**API Spend**:
+Money spent through an Anthropic API **Key** by my own tools, priced from the tokens each reply reports (ADR 0004). Not part of any **Provider**'s allowance, and not **Overage**.
+_Avoid_: API cost, API usage, bill
+
+**Key**:
+One Anthropic API key, named after its Keychain item: `personal` (`anthropic-api-key-personal`), `work`; `env` when it came from `ANTHROPIC_API_KEY`.
+_Avoid_: token, credential, account
+
+**Caller**:
+A tool of mine that calls the Anthropic API with a **Key** and reports its usage: **Suggestions** (this repo) and the **Bouncer** (reason-bridge's auto-mode judge).
+_Avoid_: client, app, consumer
+
 **Backfill**:
 History rebuilt from data that existed before recording started; only where a source allows it.
 
