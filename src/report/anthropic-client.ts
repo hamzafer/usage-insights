@@ -11,8 +11,8 @@ export const MESSAGES_URL = "https://api.anthropic.com/v1/messages";
 /** Chosen from the current model docs at build time (claude-api skill, 2026-10): Claude Sonnet 5.5. */
 export const DEFAULT_MODEL = "claude-sonnet-5-5";
 export const DEFAULT_TIMEOUT_MS = 60_000;
-/** The personal Anthropic API key's Keychain service (spec §6). */
-export const KEYCHAIN_SERVICE = "anthropic-api-key-personal";
+/** The Keychain service of the Anthropic API key the Report uses (the personal one returns 401 since Nov 2026). */
+export const KEYCHAIN_SERVICE = "anthropic-api-key-work";
 
 /** The model and token counts of one reply, for `onUsage`. */
 export interface AnthropicUsage {

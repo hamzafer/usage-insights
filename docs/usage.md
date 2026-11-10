@@ -216,7 +216,7 @@ Reports say "Setup is a DRAFT" until you remove DRAFT from the file's first line
 
 | Variable | Default |
 |---|---|
-| `ANTHROPIC_API_KEY` | Keychain item `anthropic-api-key-personal` (read at call time, never logged) |
+| `ANTHROPIC_API_KEY` | Keychain item `anthropic-api-key-work` (read at call time, never logged) |
 | `USAGE_INSIGHTS_CLAUDE_MODEL` | `claude-sonnet-5-5` |
 | `USAGE_INSIGHTS_ANTHROPIC_URL` | `https://api.anthropic.com/v1/messages` |
 

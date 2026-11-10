@@ -10,9 +10,9 @@ test("a Keychain service maps to its Key name; other services are kept", () => {
   expect(keyNameFromService("anthropic-api-key-")).toBe("anthropic-api-key-");
 });
 
-test("the Report's Key is env when ANTHROPIC_API_KEY is set, else personal", () => {
+test("the Report's Key is env when ANTHROPIC_API_KEY is set, else work", () => {
   expect(reportKeyName({ ANTHROPIC_API_KEY: "sk-ant-fake" })).toBe("env");
-  expect(reportKeyName({})).toBe("personal");
+  expect(reportKeyName({})).toBe("work");
 });
 
 test("records one priced call for the local day, as the suggestions caller", () => {

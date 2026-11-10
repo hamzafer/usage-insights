@@ -79,11 +79,11 @@ test("a network failure is a failure with its reason", async () => {
 });
 
 test("the API key comes from ANTHROPIC_API_KEY, else the Keychain, else a clear error", () => {
-  const keychain = (service: string) => (service === "anthropic-api-key-personal" ? "from-keychain" : null);
+  const keychain = (service: string) => (service === "anthropic-api-key-work" ? "from-keychain" : null);
   expect(readApiKey({ ANTHROPIC_API_KEY: "from-env" }, keychain)).toBe("from-env");
   expect(readApiKey({}, keychain)).toBe("from-keychain");
   expect(() => readApiKey({}, () => null)).toThrow(
-    "Anthropic API key not found: no ANTHROPIC_API_KEY and no Keychain item anthropic-api-key-personal",
+    "Anthropic API key not found: no ANTHROPIC_API_KEY and no Keychain item anthropic-api-key-work",
   );
 });
 
